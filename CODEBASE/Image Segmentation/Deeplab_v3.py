@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 
 # === CONFIG ===
-VOC_DIR = r"E:\Code\Python\ModelHub\DATASETS\Image-Segmentation\VOC2012_train_val"
+VOC_DIR = r"E:\Code\Python\DATASETS\VOC2012_train_val"
 MODEL_PATH = r"E:\Code\Python\ModelHub\MODELBASE\Image-Segmentation\deeplab_v3.tflite"
 
 # === Load the TFLite model ===
