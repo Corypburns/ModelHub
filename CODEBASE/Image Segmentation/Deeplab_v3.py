@@ -7,6 +7,9 @@ from datetime import datetime as dt
 import time as t
 import keyboard as k
 
+# Need to implement model RAM usages per sample.
+# Need to implement JTOP metrics as well.
+
 # === CONFIG ===
 VOC_DIR = r"E:\Code\Python\DATASETS\VOC2012_train_val"
 MODEL_PATH = r"E:\Code\Python\ModelHub\MODELBASE\Image-Segmentation\deeplab_v3.tflite"
