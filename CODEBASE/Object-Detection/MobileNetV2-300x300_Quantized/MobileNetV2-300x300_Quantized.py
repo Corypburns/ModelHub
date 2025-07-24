@@ -14,11 +14,11 @@ else:
     TEST_IMAGE_BASE_PATH = BASE_PATH / "DATASETS" / "COCO"
 
 TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
-MODEL_PATH = BASE_PATH / "MODELBASE" / "Object-Detection" / "MobileNetV2-300x300" / "ssd_mobilenet_v2_300x300.tflite"
+MODEL_PATH = BASE_PATH / "MODELBASE" / "Object-Detection" / "MobileNetV2-300x300_Quantized" / "ssd_mobilenet_v2_300x300_falquan.tflite"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Object-Detection" / "labelmap.txt"
-LOG_DIR = BASE_PATH / "OUTPUTS" / "Object-Detection" / "MobileNetV2-300x300"
+LOG_DIR = BASE_PATH / "OUTPUTS" / "Object-Detection" / "MobileNetV2-300x300_Quantized"
 DATE_TIME = dt.now().strftime("%y%m%d_%H%M%S")
-FILE_NAME = f"log_MNV2_300x300(unquantized)_{DATE_TIME}.csv"
+FILE_NAME = f"log_MNV2_300x300(quantized)_{DATE_TIME}.csv"
 OUTPUT_PATH = LOG_DIR / FILE_NAME
 HEADERS = (
     "Timestamp,Review,Mode,"
@@ -92,8 +92,6 @@ def draw_boxes(image, boxes, classes, scores, num_detections, labels=None):
 def image_processing_inference(interpreter, labels=None):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
-
-    print("Quantization:", input_details[0]['quantization'])
 
 
     for img_path in TEST_IMAGE_PATH.glob("*.jpg"):
