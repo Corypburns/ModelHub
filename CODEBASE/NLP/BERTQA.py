@@ -157,5 +157,5 @@ for i in range(len(test_samples)):
     print(f"Predicted: {predicted_answer}")
     print(f"True: {true_answer}")
     print(f"Memory used: {mem_used:.4f} MB, Inference time: {inf_time:.2f} ms\n")
-
+    time.sleep(2)
 print(f"Log saved to {OUTPUT_PATH}")

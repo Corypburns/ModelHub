@@ -108,8 +108,8 @@ def text_classification_step(interpreter):
         predicted_class = np.argmax(outputs)
         confidence = outputs[0][predicted_class] if outputs.ndim == 2 else outputs[predicted_class]
 
-        print(f"Review: {review}")
-        print(f"Prediction: Class {predicted_class} with confidence {confidence:.5f}")
+        print(f"Review: {review}\n")
+        print(f"Prediction: Class {predicted_class} with confidence {(confidence * 100):.2f}%")
         print(f"Inference time: {inf_time_ms:.5f} ms\n")
 
         time.sleep(2)  # Pause 2 seconds so you can read output comfortably

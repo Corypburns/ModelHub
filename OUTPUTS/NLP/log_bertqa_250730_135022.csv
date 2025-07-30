@@ -1,0 +1,7 @@
+Timestamp,Review,Mode,Pre_Lat_ms,Inf_Lat_ms,Post_Lat_ms,Pre_E_mJ,Inf_E_mJ,Post_E_mJ,Pre_Max_V,Pre_Mean_V,Pre_Max_C,Pre_Mean_C,Inf_Max_V,Inf_Mean_V,Inf_Max_C,Inf_Mean_C,Post_Max_V,Post_Mean_V,Post_Max_C,Post_Mean_C,Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW
+2025-07-30 13:50:24,2012,inference,0,191.8,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2025-07-30 13:50:26,amnesia,inference,0,189.46,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2025-07-30 13:50:29,16th,inference,0,189.15,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2025-07-30 13:50:31,,inference,0,189.0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2025-07-30 13:50:33,sixteenth,inference,0,183.57,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
+2025-07-30 13:50:35,,inference,0,186.21,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0
