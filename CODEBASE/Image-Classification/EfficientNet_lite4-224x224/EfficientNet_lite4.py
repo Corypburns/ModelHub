@@ -6,13 +6,12 @@ from pathlib import Path
 import numpy as np
 import socket
 import cv2
-import os
+from jtop import jtop
 
-# === System Info ===
 host = socket.gethostname()
-print(f"Running on host: {host}")
+print(host)
 
-# === Paths ===
+# === CONFIG ===
 match host:
     case "CoryPC":
         BASE_PATH = Path(r"C:\Users\burns\OneDrive\Desktop\Projects\Python\ModelHub")
@@ -28,11 +27,10 @@ TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
 MODEL_PATH = BASE_PATH / "MODELBASE" / "Image-Classification" / "EfficientNet_lite4-224x224" / "efficientnet_lite4_fp32_2.tflite"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Image-Classification" / "labels.txt"
 LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "EfficientNet_lite4-224x224"
-
-# === Logging ===
 DATE_TIME = dt.now().strftime("%y%m%d_%H%M%S")
 FILE_NAME = f"log_ENL4_224x224(float)_{DATE_TIME}.csv"
 OUTPUT_PATH = LOG_DIR / FILE_NAME
+
 HEADERS = (
     "Timestamp,Review,Mode,"
     "Pre_Lat_ms,Inf_Lat_ms,Post_Lat_ms,"
@@ -43,6 +41,7 @@ HEADERS = (
     "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW\n"
 )
 
+# === CSV METHODS ===
 def init_csv():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     if not OUTPUT_PATH.exists():
@@ -54,12 +53,12 @@ def append_csv_row(*args):
     with open(OUTPUT_PATH, 'a') as f:
         f.write(row)
 
-# === Load Labels ===
+# === LOAD LABEL MAP ===
 def load_labels(label_path):
     with open(label_path, 'r') as f:
         return [line.strip() for line in f.readlines()]
 
-# === Load Model with Mode ===
+# === LOAD MODEL WITH MODE ===
 def load_model(mode="CPU-1"):
     start_load = t.time()
     interpreter = None
@@ -69,7 +68,7 @@ def load_model(mode="CPU-1"):
         print(f"[INFO] Using CPU with {num_threads} thread(s)")
         interpreter = tf.lite.Interpreter(
             model_path=str(MODEL_PATH),
-            num_threads=num_threads  # ✅ Correct argument
+            num_threads=num_threads
         )
 
     elif mode == "GPU":
@@ -100,78 +99,128 @@ def load_model(mode="CPU-1"):
 
     return interpreter
 
-# === Image Processing & Inference ===
+# === SAMPLE POWER/VOLTAGE/CURRENT USING JTOP ===
+def sample_stats(jetson, duration=0.5, sampling_interval=0.05):
+    voltages = []
+    currents = []
+    powers = []
+    samples = int(duration / sampling_interval)
+
+    for _ in range(samples):
+        stats = jetson.stats
+        # Use 'VDD_IN' rail as example - change as needed
+        voltage = stats['voltages'].get('VDD_IN', 0)
+        current = stats['currents'].get('VDD_IN', 0)
+        power = stats['power'].get('VDD_IN', 0)
+
+        voltages.append(voltage)
+        currents.append(current)
+        powers.append(power)
+
+        t.sleep(sampling_interval)
+
+    mean_V = np.mean(voltages)
+    max_V = np.max(voltages)
+    mean_C = np.mean(currents)
+    max_C = np.max(currents)
+    mean_P = np.mean(powers)
+    max_P = np.max(powers)
+
+    energy_mJ = mean_P * duration * 1000  # power(W) * seconds * 1000 = mJ
+    power_mW = mean_P * 1000
+
+    return {
+        'mean_V': mean_V,
+        'max_V': max_V,
+        'mean_C': mean_C,
+        'max_C': max_C,
+        'power_mW': power_mW,
+        'energy_mJ': energy_mJ,
+    }
+
+# === IMAGE PROCESSING WITH JTOP POWER LOGGING ===
 def image_processing(interpreter, labels, input_shape, mode):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
-    for img_path in TEST_IMAGE_PATH.glob("*.jpg"):
-        delay_start = t.time()
+    with jtop() as jetson:
+        if not jetson.ok():
+            print("jtop service not running properly. Exiting.")
+            return
 
-        img_raw = cv2.imread(str(img_path))
-        if img_raw is None:
-            print(f"Could not read: {img_path}")
-            continue
+        for img_path in TEST_IMAGE_PATH.glob("*.jpg"):
 
-        img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)
-        img_resized = cv2.resize(img_rgb, (input_shape[2], input_shape[1]))
-        img_normalized = img_resized.astype(np.float32) / 255.0
-        input_tensor = np.expand_dims(img_normalized, axis=0)
+            # Pre-inference sample
+            pre_stats = sample_stats(jetson, duration=0.5)
 
-        interpreter.set_tensor(input_details[0]['index'], input_tensor)
-        inf_start = t.time()
-        interpreter.invoke()
-        inf_end = t.time()
-        delay_end = t.time()
+            # Load & preprocess image
+            img_raw = cv2.imread(str(img_path))
+            if img_raw is None:
+                print(f"Image not found or unreadable: {img_path}")
+                continue
+            img_rgb = cv2.cvtColor(img_raw, cv2.COLOR_BGR2RGB)
+            img_resized = cv2.resize(img_rgb, (input_shape[2], input_shape[1]))
+            img_normalized = img_resized.astype(np.float32) / 255.0
+            input_tensor = np.expand_dims(img_normalized, axis=0)
 
-        output = interpreter.get_tensor(output_details[0]['index'])
-        top_idx = np.argmax(output[0])
-        pred_label = labels[top_idx]
-        confidence = output[0][top_idx]
+            # Inference
+            inf_start = t.time()
+            interpreter.set_tensor(input_details[0]['index'], input_tensor)
+            interpreter.invoke()
+            inf_end = t.time()
 
-        pre_latency = (inf_start - delay_start) * 1000
-        inf_latency = (inf_end - inf_start) * 1000
-        post_latency = (delay_end - inf_end) * 1000
+            # Post-inference sample
+            post_stats = sample_stats(jetson, duration=0.5)
 
-        timestamp = dt.now().strftime("%Y-%m-%d %H:%M:%S")
-        print(f"{img_path.name} → {pred_label} ({confidence*100:.2f}%) | Inf Time: {inf_latency:.2f} ms")
+            # Output processing
+            output = interpreter.get_tensor(output_details[0]['index'])
+            top_idx = np.argmax(output[0])
+            pred_label = labels[top_idx]
+            confidence = output[0][top_idx]
 
-        append_csv_row(
-            timestamp,
-            img_path.name,
-            mode,
-            f"{pre_latency:.2f}", f"{inf_latency:.2f}", f"{post_latency:.2f}",
-            *["" for _ in range(3 + 4*3 + 3)]
-        )
+            # Timing calculations (ms)
+            pre_latency = 500  # fixed sample time (0.5s)
+            inf_latency = (inf_end - inf_start) * 1000
+            post_latency = 500  # fixed sample time (0.5s)
 
-        print("Press SPACE to continue to next image...")
-        k.wait("space")
+            # Append CSV row
+            append_csv_row(
+                dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+                img_path.name,
+                mode,
+                f"{pre_latency:.2f}", f"{inf_latency:.2f}", f"{post_latency:.2f}",
+                f"{pre_stats['energy_mJ']:.3f}", "", f"{post_stats['energy_mJ']:.3f}",
+                f"{pre_stats['max_V']:.3f}", f"{pre_stats['mean_V']:.3f}",
+                f"{pre_stats['max_C']:.3f}", f"{pre_stats['mean_C']:.3f}",
+                "", "", "", "",  # placeholders for inf current/volt (add if you want)
+                f"{post_stats['max_V']:.3f}", f"{post_stats['mean_V']:.3f}",
+                f"{post_stats['max_C']:.3f}", f"{post_stats['mean_C']:.3f}",
+                f"{pre_stats['power_mW']:.3f}", "", f"{post_stats['power_mW']:.3f}"
+            )
 
-# === Menu ===
-def select_mode():
-    print("\nSelect Inference Mode:")
-    print("1. CPU (1 Thread)")
-    print("2. CPU (4 Threads)")
-    print("3. GPU")
-    print("q. Quit")
+            print(f"{img_path.name} → {pred_label} ({confidence*100:.2f}%), Inference Time: {inf_latency:.2f} ms")
+            print("Press SPACE to continue...")
+            k.wait('space')
 
-    while True:
-        choice = input("Enter choice [1-3 or q]: ").strip().lower()
-        if choice == "1":
-            return "CPU-1"
-        elif choice == "2":
-            return "CPU-4"
-        elif choice == "3":
-            return "GPU"
-        elif choice == "q":
-            print("Exiting.")
-            exit()
-        else:
-            print("Invalid choice. Please enter 1, 2, 3, or q.")
+# === MENU ===
+def menu():
+    print("Choose inference mode:")
+    print("1) CPU (1 thread)")
+    print("2) CPU (4 threads)")
+    print("3) GPU (if supported)")
+    choice = input("Enter choice (1-3): ")
+    if choice == "1":
+        return "CPU-1"
+    elif choice == "2":
+        return "CPU-4"
+    elif choice == "3":
+        return "GPU"
+    else:
+        print("Invalid choice. Defaulting to CPU-1")
+        return "CPU-1"
 
-# === Main ===
 def main():
-    mode = select_mode()
+    mode = menu()
     interpreter = load_model(mode=mode)
     labels = load_labels(LABEL_MAP)
     input_shape = interpreter.get_input_details()[0]['shape']
