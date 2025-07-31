@@ -77,7 +77,8 @@ def models_menu():
           "2) Natural Language Processing\n",
           "3) Object Detection\n",
           "4) Super-Resolution\n",
-          "5) Text-Classification\n")
+          "5) Text-Classification\n",
+          "6) Image-Classification\n")
     try:
         choice = int(input("Select a category -> "))
     except ValueError:
@@ -88,10 +89,10 @@ def models_menu():
     match choice:
         case 1:
             location = base_path / "Image-Segmentation" / "Deeplab_v3.py"
-            if location.exists():
+            try:
                 subprocess.run(["python", location])
-            else:
-                print("File does not exist or something is wrong.")
+            except:
+                FileNotFoundError("File not found")
         case 2:
             location = base_path / "NLP" / "BERTQA.py"
             try:
@@ -108,6 +109,8 @@ def models_menu():
                 FileNotFoundError
         case 5:
             text_classification_models()
+        case 6:
+            image_classification_models()
         case _:
             print("Invalid entry.")
             return
