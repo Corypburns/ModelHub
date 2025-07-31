@@ -9,7 +9,6 @@ else:
     
 location = None
 choice = None
-image_segmentation = base_path / "Deeplab_v3.py"
 
 # === MODEL METHODS FOR MODELS WITH MORE THAN ONE SUBFOLDER/FILE ===
 def object_detection_models():
@@ -70,14 +69,38 @@ def text_classification_models():
         case _:
             print("Invalid entry.")
             return
-
+def image_classification_models():
+    print(" 1) EfficientNet_lite4 (FLOAT)\n",
+          "2) EfficientNet_lite4 (QUANTIZED)\n",
+          "3) MobileNetV1_224x224 (FLOAT)\n",
+          "4) MobileNetV1-224x224 (QUANTIZED)\n"
+    )
+    choice = int(input("Select a category -> "))
+    
+    match choice:
+        case 1:
+            location = base_path / "Image-Classification" /"EfficientNet_lite4-224x224" / "EfficientNet_lite4.py"
+            try:
+                subprocess.run(["python", location])
+            except:
+                FileNotFoundError
+        case 2:
+            location = base_path / "Image-Classification" /"EfficientNet_lite4-224x224_Quantized" / "EfficientNet_lite4-224x224_Quantized.py"
+            try:
+                subprocess.run(["python", location])
+            except:
+                FileNotFoundError
+        case _:
+            print("Invalid entry.")
+            return
 
 def models_menu():
     print(" 1) Image-Segmentation\n",
           "2) Natural Language Processing\n",
           "3) Object Detection\n",
           "4) Super-Resolution\n",
-          "5) Text-Classification\n")
+          "5) Text-Classification\n",
+          "6) Image-Classification\n")
     try:
         choice = int(input("Select a category -> "))
     except ValueError:
@@ -88,10 +111,10 @@ def models_menu():
     match choice:
         case 1:
             location = base_path / "Image-Segmentation" / "Deeplab_v3.py"
-            if location.exists():
+            try:
                 subprocess.run(["python", location])
-            else:
-                print("File does not exist or something is wrong.")
+            except:
+                FileNotFoundError
         case 2:
             location = base_path / "NLP" / "BERTQA.py"
             try:
@@ -108,6 +131,8 @@ def models_menu():
                 FileNotFoundError
         case 5:
             text_classification_models()
+        case 6:
+            image_classification_models()
         case _:
             print("Invalid entry.")
             return
