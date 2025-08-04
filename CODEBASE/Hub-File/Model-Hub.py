@@ -90,6 +90,18 @@ def image_classification_models():
                 subprocess.run(["python", location])
             except:
                 FileNotFoundError
+        case 3:
+            location = base_path / "Image-Classification" /"MobileNetV1-224x224" / "MobileNetV1-224x224.py"
+            try:
+                subprocess.run(["python", location])
+            except:
+                FileNotFoundError
+        case 4:
+            location = base_path / "Image-Classification" /"MobileNetV1-224x224_Quantized" / "MobileNetV1-224x224_Quantized.py"
+            try:
+                subprocess.run(["python", location])
+            except:
+                FileNotFoundError
         case _:
             print("Invalid entry.")
             return

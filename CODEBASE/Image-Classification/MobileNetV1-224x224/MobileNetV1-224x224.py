@@ -18,11 +18,11 @@ match host:
         None
     
 TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
-MODEL_PATH = BASE_PATH / "MODELBASE" / "Image-Classification" / "EfficientNet_lite4-224x224_Quantized" / "efficientnet_lite4_int8_2.tflite"
-LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "EfficientNet_lite4-224x224_Quantized"
+MODEL_PATH = BASE_PATH / "MODELBASE" / "Image-Classification" / "MobileNetV1-224x224" / "mobilenet_v1_1_224.tflite"
+LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "MobileNetV1-224x224"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Image-Classification" / "labels.txt"
 DATE_TIME = dt.now().strftime("%y%m%d_%H%M%S")
-FILE_NAME = f"log_ENL4_224x224(quantized)_{DATE_TIME}.csv"
+FILE_NAME = f"log_MNV1_224x224(float)_{DATE_TIME}.csv"
 OUTPUT_PATH = LOG_DIR / FILE_NAME
 HEADERS = (
     "Timestamp,Review,Mode,"
@@ -82,7 +82,6 @@ def load_model(num_threads):
     
     return interpreter
 
-# === PROCESS IMAGES ===
 def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -90,26 +89,22 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
     for img_path in TEST_IMAGE_PATH.glob("*.jpg"):
         delay_start = t.time()
         raw_img = cv2.imread(str(img_path))
-        height, width = input_details[0]['shape'][1], input_details[0]['shape'][2]
-        resized_img = cv2.resize(raw_img, (width, height))
-        rgb_img = cv2.cvtColor(resized_img, cv2.COLOR_BGR2RGB)
-        normalized_img = rgb_img.astype(np.uint8)
-        input_tensor = np.expand_dims(normalized_img, axis=0)
-    
+        height, width = input_details[0]['shape'][1], input_details[0]['shape'][2] # [1] and [2] are height and width respectively
+        resize = cv2.resize(raw_img, (width, height))
+        color_cv2 = cv2.cvtColor(resize, cv2.COLOR_BGR2RGB)
+        img_normal = color_cv2.astype(np.float32)
+        input_tensor = np.expand_dims(img_normal, axis=0)
+        
         interpreter.set_tensor(input_details[0]['index'], input_tensor)
         interpreter.invoke()
         delay_end = t.time()
         
         output = interpreter.get_tensor(output_details[0]['index'])[0]
-        scale, zero = output_details[0]['quantization']
-        if scale > 0:
-            output = scale * (output.astype(np.uint8) - zero)
+        prediction = output.argmax()
+        prediction_label = labels[prediction]
+        confidence = output[prediction]
         
-        predicted_index = output.argmax()
-        predicted_label = labels[predicted_index]
-        confidence = output[predicted_index]
-        
-        print(f"Image: {img_path.name} | Prediction: {predicted_label} - {(confidence) * 100:.2f}% | ({(delay_end - delay_start) * 1000:.2f} ms.)")
+        print(f"Image: {img_path.name} | Prediction: {prediction_label} - {(confidence) * 100:.2f}% | ({(delay_end - delay_start) * 1000:.2f} ms.)")
         t.sleep(1)
         
         append_csv_row(
@@ -138,7 +133,7 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
             inf_pwr=0,
             post_pwr=0,
         )
-        
+
 def menu():
     print("Inference Mode\n1) CPU1\n2) CPU4\n3) GPU\n")
     choice = int(input("-> "))
@@ -156,10 +151,9 @@ def menu():
             image_processing_inference(interpreter, TEST_IMAGE_PATH, labels, mode)
         case 3:
             None
-
-
+            
 def main():
     init_csv()
     menu()
-
+    
 main()
