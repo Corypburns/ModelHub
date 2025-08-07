@@ -4,7 +4,6 @@ from datetime import datetime as dt
 import keyboard as k
 from pathlib import Path
 import platform, cv2, numpy as np
-import glob
 
 # === CONFIG ===
 if platform.system() == "Windows":
@@ -38,8 +37,26 @@ def init_csv():
         with open(OUTPUT_PATH, 'w') as f:
             f.write(HEADERS)
 
-def append_csv_row(*args):
-    row = ",".join(map(str, args)) + "\n"
+def append_csv_row(
+        timestamp, review, mode,
+        pre_lat_ms=0, inf_lat_ms=0, post_lat_ms=0,
+        pre_e_mJ=0, inf_e_mJ=0, post_e_mJ=0,
+        pre_max_v=0, pre_mean_v=0, pre_max_c=0, pre_mean_c=0,
+        inf_max_v=0, inf_mean_v=0, inf_max_c=0, inf_mean_c=0,
+        post_max_v=0, post_mean_v=0, post_max_c=0, post_mean_c=0,
+        pre_pwr=0, inf_pwr=0, post_pwr=0
+    ):
+    row = ",".join([
+        timestamp,
+        review,
+        mode,
+        f"{pre_lat_ms:.1f}", f"{inf_lat_ms:.1f}", f"{post_lat_ms:.1f}",
+        f"{pre_e_mJ:.1f}", f"{inf_e_mJ:.1f}", f"{post_e_mJ:.1f}",
+        f"{pre_max_v:.2f}", f"{pre_mean_v:.2f}", f"{pre_max_c:.2f}", f"{pre_mean_c:.2f}",
+        f"{inf_max_v:.2f}", f"{inf_mean_v:.2f}", f"{inf_max_c:.2f}", f"{inf_mean_c:.2f}",
+        f"{post_max_v:.2f}", f"{post_mean_v:.2f}", f"{post_max_c:.2f}", f"{post_mean_c:.2f}",
+        f"{pre_pwr:.2f}", f"{inf_pwr:.2f}", f"{post_pwr:.2f}"
+    ]) + "\n"
     with open(OUTPUT_PATH, 'a') as f:
         f.write(row)
 
@@ -49,9 +66,9 @@ def load_labels(label_path):
         return [line.strip() for line in f.readlines()]
 
 # === LOAD MODEL ===
-def load_model():
+def load_model(num_threads=1):
     start_load = t.time()
-    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH))
+    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH), num_threads=num_threads)
     end_load = t.time()
 
     start_allocation = t.time()
@@ -90,12 +107,11 @@ def draw_boxes(image, boxes, classes, scores, num_detections, labels=None):
     return image
 
 # === PROCESS IMAGES ===
-def image_processing_inference(interpreter, labels=None):
+def image_processing_inference(interpreter, labels=None, mode="CPU1"):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
     print("Quantization:", input_details[0]['quantization'])
-
 
     for img_path in TEST_IMAGE_PATH.glob("*.jpg"):
         delay_start = t.time()
@@ -115,14 +131,10 @@ def image_processing_inference(interpreter, labels=None):
         delay_end = t.time()
 
         timestamp = dt.now().strftime("%Y-%m-%d %H:%M:%S")
-        append_csv_row(timestamp, 
-                       img_path.name, 
-                       "CPU"
-        )
 
-        print(f"Image: {img_path.name}", 
-              f"Processed in: {(delay_end - delay_start) * 1000:.2f} ms")
-        cv2.waitKey(1000)
+        inf_lat_ms = (delay_end - delay_start) * 1000
+
+        print(f"Image: {img_path.name} | Inference time: {inf_lat_ms:.2f} ms")
 
         boxes = interpreter.get_tensor(output_details[0]['index'])[0]
         classes = interpreter.get_tensor(output_details[1]['index'])[0]
@@ -134,12 +146,57 @@ def image_processing_inference(interpreter, labels=None):
         if cv2.waitKey(1000) & 0xFF == ord('q'):
             break
 
+        append_csv_row(
+            timestamp=timestamp,
+            review=img_path.name,
+            mode=mode,
+            pre_lat_ms=0,
+            inf_lat_ms=inf_lat_ms,
+            post_lat_ms=0,
+            pre_e_mJ=0,
+            inf_e_mJ=0,
+            post_e_mJ=0,
+            pre_max_v=0,
+            pre_mean_v=0,
+            pre_max_c=0,
+            pre_mean_c=0,
+            inf_max_v=0,
+            inf_mean_v=0,
+            inf_max_c=0,
+            inf_mean_c=0,
+            post_max_v=0,
+            post_mean_v=0,
+            post_max_c=0,
+            post_mean_c=0,
+            pre_pwr=0,
+            inf_pwr=0,
+            post_pwr=0,
+        )
+
+
+# === MENU ===
+def menu():
+    print("Inference Mode\n1) CPU1\n2) CPU4\n3) GPU\n")
+    choice = int(input("-> "))
+
+    match choice:
+        case 1:
+            mode = "CPU1"
+            interpreter = load_model(num_threads=1)
+            image_processing_inference(interpreter, labels=load_labels(LABEL_MAP), mode=mode)
+        case 2:
+            mode = "CPU4"
+            interpreter = load_model(num_threads=4)
+            image_processing_inference(interpreter, labels=load_labels(LABEL_MAP), mode=mode)
+        case 3:
+            print("GPU inference not implemented.")
+        case _:
+            print("Invalid choice.")
+
 # === MAIN ===
 def main():
     init_csv()
-    interpreter = load_model()
-    labels = load_labels(LABEL_MAP)
-    image_processing_inference(interpreter, labels)
+    menu()
 
-
-main()
+if __name__ == "__main__":
+    main()
