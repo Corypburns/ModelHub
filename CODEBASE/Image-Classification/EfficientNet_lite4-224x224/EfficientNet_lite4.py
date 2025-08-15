@@ -86,6 +86,9 @@ def load_model(num_threads):
 def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
+    
+    print(input_details[0]['dtype'])
+    print(input_details[0]['shape'])
 
     print("Quantization:", input_details[0]['quantization'])
     
