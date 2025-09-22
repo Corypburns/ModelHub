@@ -21,7 +21,7 @@ match host:
         TEST_IMAGE_BASE_PATH = Path("/home/nano1/anik-lab/coco")
     
 TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
-MODEL_PATH = BASE_PATH / "MODELBASE" / "Image-Classification" / "EfficientNet_lite4-224x224" / "efficientnet_lite4_fp32_2.tflite"
+MODEL_PATH = BASE_PATH / "MODELBASE" / "Video-Classification" / "a0-stream-kinetics-600-classification-tflite-float.tflite"
 LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "EfficientNet_lite4-224x224"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Image-Classification" / "labels.txt"
 DATE_TIME = dt.now().strftime("%y%m%d_%H%M%S")

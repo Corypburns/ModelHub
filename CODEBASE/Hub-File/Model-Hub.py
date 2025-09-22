@@ -9,8 +9,8 @@ match host:
         BASE_PATH = Path(r"E:\Code\Python\ModelHub\CODEBASE")
     case "CoryPC":
         BASE_PATH = None # Placeholder value for my laptop
-    case "Placeholder": # Enter the host name of the computer you are working on
-        None
+    case "nano1-desktop":
+        BASE_PATH = Path("/home/nano1/anik-lab/ModelHub/CODEBASE")
     
 location = None
 choice = None
@@ -162,4 +162,5 @@ def models_menu():
             return
 
 
-models_menu()
+if __name__ == "__main__":
+	models_menu()

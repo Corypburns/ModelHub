@@ -1,17 +1,22 @@
 import tensorflow as tf
 import time as t
 from datetime import datetime as dt
-import keyboard as k
 from pathlib import Path
 import platform, cv2, numpy as np
+import socket
 
 # === CONFIG ===
-if platform.system() == "Windows":
-    BASE_PATH = Path(r"E:\Code\Python\ModelHub")
-    TEST_IMAGE_BASE_PATH = Path(r"E:\Code\Python\DATASETS\COCO")
-else:
-    BASE_PATH = Path.home() / "ModelHub"
-    TEST_IMAGE_BASE_PATH = BASE_PATH / "DATASETS" / "COCO"
+host = socket.gethostname()
+match host:
+    case "DESKTOP-FI8GT7F":
+        BASE_PATH = Path(r"E:\Code\Python\ModelHub")
+        TEST_IMAGE_BASE_PATH = Path(r"E:\Code\Python\DATASETS\COCO")
+    case "CoryPC":
+        BASE_PATH = None # Placeholder value for my laptop
+        TEST_IMAGE_BASE_PATH = None # Placeholder value for my laptop
+    case "nano1-desktop": # Enter the host name of the computer you are working on
+        BASE_PATH = Path("/home/nano1/anik-lab/ModelHub")
+        TEST_IMAGE_BASE_PATH = Path("/home/nano1/anik-lab/coco")
 
 TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
 MODEL_PATH = BASE_PATH / "MODELBASE" / "Object-Detection" / "MobileNetV2-300x300_Quantized" / "ssd_mobilenet_v2_300x300_falquan.tflite"
@@ -48,9 +53,9 @@ def load_labels(label_path):
         return [line.strip() for line in f.readlines()]
 
 # === LOAD MODEL ===
-def load_model():
+def load_model(num_threads):
     start_load = t.time()
-    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH))
+    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH), num_threads=num_threads)
     end_load = t.time()
 
     start_allocation = t.time()
@@ -58,8 +63,8 @@ def load_model():
     end_allocation = t.time()
     print(f"Model load time: {(end_load - start_load) * 1000:.2f} ms.",
           f"\nModel allocation time: {(end_allocation - start_allocation) * 1000:.2f} ms.", 
-          "\n\nPress 'space' to continue...")
-    k.wait('space')
+          "\n\nPress 'enter' to continue...")
+    input()
     return interpreter
 
 # === DRAW BOXES ===
@@ -89,7 +94,7 @@ def draw_boxes(image, boxes, classes, scores, num_detections, labels=None):
     return image
 
 # === PROCESS IMAGES ===
-def image_processing_inference(interpreter, labels=None):
+def image_processing_inference(interpreter, labels=None, mode="CPU1"):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
@@ -132,11 +137,36 @@ def image_processing_inference(interpreter, labels=None):
             break
 
 # === MAIN ===
-def main():
-    init_csv()
-    interpreter = load_model()
-    labels = load_labels(LABEL_MAP)
-    image_processing_inference(interpreter, labels)
+def menu():
+    print("\n--- Select Mode ---\n1: CPU 1 Thread\n2: CPU 4 Threads\n3: GPU\n4: Quit\n")
+    choice = input("Enter your choice: ").strip()
+
+    if choice == '1':
+        interpreter = load_model(num_threads=1)
+        init_csv()
+        labels = load_labels(LABEL_MAP)
+        image_processing_inference(interpreter, labels, mode="CPU1")
+
+    elif choice == '2':
+        interpreter = load_model(num_threads=4)
+        init_csv()
+        labels = load_labels(LABEL_MAP)
+        image_processing_inference(interpreter, labels, mode="CPU4")
+
+    elif choice == '3':
+        interpreter = load_model(num_threads=0)
+        init_csv()
+        labels = load_labels(LABEL_MAP)
+        image_processing_inference(interpreter, labels, mode="GPU")
+
+    elif choice == '4':
+        print("Exiting...")
+        exit()
+
+    else:
+        print("Invalid choice, try again.")
+        menu()
 
 
-main()
+if __name__ == "__main__":
+    menu()

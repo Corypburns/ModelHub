@@ -1,16 +1,24 @@
 import tensorflow as tf
 import matplotlib.pyplot as mpl
-import cv2, time as t
+import cv2
+import time as t
 from datetime import datetime as dt
-import keyboard as k
 from pathlib import Path
-import platform
+import socket
+import numpy as np
 
+# Doesn't work for some reason, works on my pc at home though
 # === CONFIG ===
-if platform.system() == "Windows":
-    BASE_PATH = Path(r"E:\Code\Python\ModelHub")
-else:
-    BASE_PATH = Path.home() / "ModelHub"
+host = socket.gethostname()
+print(host)
+
+match host:
+    case "DESKTOP-FI8GT7F":
+        BASE_PATH = Path(r"E:\Code\Python\ModelHub")
+    case "CoryPC":
+        BASE_PATH = None # Placeholder value
+    case "nano1-desktop":
+        BASE_PATH = Path("/home/nano1/anik-lab/ModelHub")
 
 IMAGE_PATH = BASE_PATH / "DATASETS" / "Super-Resolution"
 MODEL_PATH = BASE_PATH / "MODELBASE" / "Super-Resolution" / "ESRGAN.tflite"
@@ -28,42 +36,83 @@ HEADERS = (
     "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW\n"
 )
 
-# === LOAD IMAGE ===
-lr = cv2.imread(str(IMAGE_PATH / "lr-1.jpg"))
-lr = cv2.cvtColor(lr, cv2.COLOR_BGR2RGB)
-lr = tf.expand_dims(lr, axis=0)
-lr = tf.cast(lr, tf.float32)
-
-# === UTILITY FUNCTIONS ===
+# === CSV FUNCTIONS ===
 def init_csv():
     LOG_DIR.mkdir(parents=True, exist_ok=True)
     if not OUTPUT_PATH.exists():
         with open(OUTPUT_PATH, 'w') as f:
             f.write(HEADERS)
 
-def append_csv_row(*args):
-    row = ",".join(map(str, args)) + "\n"
+def append_csv_row(
+    timestamp, review, mode,
+    pre_lat_ms, inf_lat_ms, post_lat_ms,
+    pre_e_mJ, inf_e_mJ, post_e_mJ,
+    pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
+    inf_max_v, inf_mean_v, inf_max_c, inf_mean_c,
+    post_max_v, post_mean_v, post_max_c, post_mean_c,
+    pre_pwr, inf_pwr, post_pwr
+):
+    row = ",".join(map(str, [
+        timestamp, review, mode,
+        f"{pre_lat_ms:.1f}", f"{inf_lat_ms:.1f}", f"{post_lat_ms:.1f}",
+        f"{pre_e_mJ:.1f}", f"{inf_e_mJ:.1f}", f"{post_e_mJ:.1f}",
+        f"{pre_max_v:.2f}", f"{pre_mean_v:.2f}", f"{pre_max_c:.2f}", f"{pre_mean_c:.2f}",
+        f"{inf_max_v:.2f}", f"{inf_mean_v:.2f}", f"{inf_max_c:.2f}", f"{inf_mean_c:.2f}",
+        f"{post_max_v:.2f}", f"{post_mean_v:.2f}", f"{post_max_c:.2f}", f"{post_mean_c:.2f}",
+        f"{pre_pwr:.2f}", f"{inf_pwr:.2f}", f"{post_pwr:.2f}"
+    ])) + "\n"
     with open(OUTPUT_PATH, 'a') as f:
         f.write(row)
 
-def run_model(interpreter):
+# === LOAD MODEL ===
+def load_model(num_threads):
+    start_load = t.time()
+    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH), num_threads=num_threads)
+    end_load = t.time()
+
+    start_alloc = t.time()
+    interpreter.allocate_tensors()
+    end_alloc = t.time()
+
+    print(
+        f"Model Load Time: {(end_load - start_load)*1000:.2f} ms",
+        f"\nModel Allocation Time: {(end_alloc - start_alloc)*1000:.2f} ms",
+        "\n\nPress Enter to continue..."
+    )
+    input()
+
+    return interpreter
+
+# === PROCESSING & INFERENCE ===
+def run_inference(interpreter, img_path, mode="CPU1"):
     input_details = interpreter.get_input_details()
+    output_details = interpreter.get_output_details()
+
+    # === PREPROCESS ===
+    pre_start = t.time()
+    lr = cv2.imread(str(img_path))
+    lr = cv2.cvtColor(lr, cv2.COLOR_BGR2RGB)
+    lr = tf.expand_dims(lr, axis=0)
+    lr = tf.cast(lr, tf.float32)
+    pre_end = t.time()
+
+    # === INFERENCE ===
+    inf_start = t.time()
     interpreter.set_tensor(input_details[0]['index'], lr)
     interpreter.invoke()
+    inf_end = t.time()
 
-def processing(interpreter):
-    output_details = interpreter.get_output_details()
+    # === POSTPROCESS ===
+    post_start = t.time()
     output_data = interpreter.get_tensor(output_details[0]['index'])
     sr = tf.squeeze(output_data, axis=0)
     sr = tf.clip_by_value(sr, 0, 255)
     sr = tf.round(sr)
     sr = tf.cast(sr, tf.uint8)
+    post_end = t.time()
 
+    # === DISPLAY ===
     lr_disp = tf.cast(tf.squeeze(lr, axis=0), tf.uint8)
-
-    mpl.figure(figsize=(1, 1))
-    mpl.title('LR')
-    mpl.imshow(lr_disp.numpy())
 
     mpl.figure(figsize=(10, 4))
     mpl.subplot(1, 2, 1)
@@ -79,27 +128,49 @@ def processing(interpreter):
 
     mpl.show()
 
-# === DRIVER FUNCTION ===
-def main_pipeline():
-    
-    # === LOAD MODEL ===
-    start_load = t.time()
-    interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH))
-    end_load = t.time()
-
-    start_allocation = t.time()
-    interpreter.allocate_tensors()
-    end_allocation = t.time()
-
-    print(
-        f"Model Load Time: {(end_load - start_load) * 1000:.2f} ms.",
-        f"\nModel Allocation Time: {(end_allocation - start_allocation) * 1000:.2f} ms.\nPress space to continue...."
+    # === LOG ===
+    append_csv_row(
+        timestamp=dt.now().strftime("%Y-%m-%d %H:%M:%S"),
+        review=img_path.name,
+        mode=mode,
+        pre_lat_ms=(pre_end - pre_start) * 1000,
+        inf_lat_ms=(inf_end - inf_start) * 1000,
+        post_lat_ms=(post_end - post_start) * 1000,
+        pre_e_mJ=0, inf_e_mJ=0, post_e_mJ=0,
+        pre_max_v=0, pre_mean_v=0, pre_max_c=0, pre_mean_c=0,
+        inf_max_v=0, inf_mean_v=0, inf_max_c=0, inf_mean_c=0,
+        post_max_v=0, post_mean_v=0, post_max_c=0, post_mean_c=0,
+        pre_pwr=0, inf_pwr=0, post_pwr=0
     )
-    k.wait('space')
 
-    # === RUN MODEL ===
-    run_model(interpreter)
-    processing(interpreter)
+    t.sleep(1)
+
+# === MAIN MENU ===
+def menu():
+    print("Super-Resolution Inference Mode\n1) CPU1\n2) CPU4\n3) GPU (NOT IMPLEMENTED)\n")
+    choice = int(input("-> "))
+
+    match choice:
+        case 1:
+            mode = "CPU1"
+            interpreter = load_model(num_threads=1)
+        case 2:
+            mode = "CPU4"
+            interpreter = load_model(num_threads=4)
+        case 3:
+            print("GPU not supported in TFLite on this script.")
+            return
+        case _:
+            print("Invalid choice.")
+            return
+
+    for img_path in IMAGE_PATH.glob("*.jpg"):
+        run_inference(interpreter, img_path, mode)
+
+# === DRIVER FUNCTION ===
+def main():
     init_csv()
+    menu()
 
-main_pipeline()
+main()
+
