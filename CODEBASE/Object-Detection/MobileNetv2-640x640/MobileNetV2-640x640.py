@@ -2,8 +2,9 @@ import tensorflow as tf
 import time as t
 from datetime import datetime as dt
 from pathlib import Path
-import platform, cv2, numpy as np
 import socket
+import cv2
+import numpy as np
 from jtop import jtop
 
 # === CONFIG ===
@@ -57,12 +58,12 @@ def append_csv_row(
 ):
     row = ",".join(map(str, [
         timestamp, review, mode,
-        pre_lat_ms, inf_lat_ms, post_lat_ms,
-        pre_e_mJ, inf_e_mJ, post_e_mJ,
-        pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
-        inf_max_v, inf_mean_v, inf_max_c, inf_mean_c,
-        post_max_v, post_mean_v, post_max_c, post_mean_c,
-        pre_pwr, inf_pwr, post_pwr
+        f"{pre_lat_ms:.1f}", f"{inf_lat_ms:.1f}", f"{post_lat_ms:.1f}",
+        f"{pre_e_mJ:.1f}", f"{inf_e_mJ:.1f}", f"{post_e_mJ:.1f}",
+        f"{pre_max_v:.2f}", f"{pre_mean_v:.2f}", f"{pre_max_c:.2f}", f"{pre_mean_c:.2f}",
+        f"{inf_max_v:.2f}", f"{inf_mean_v:.2f}", f"{inf_max_c:.2f}", f"{inf_mean_c:.2f}",
+        f"{post_max_v:.2f}", f"{post_mean_v:.2f}", f"{post_max_c:.2f}", f"{post_mean_c:.2f}",
+        f"{pre_pwr:.2f}", f"{inf_pwr:.2f}", f"{post_pwr:.2f}"
     ])) + "\n"
     with open(OUTPUT_PATH, 'a', encoding='utf-8') as f:
         f.write(row)
@@ -77,7 +78,6 @@ def load_model(num_threads):
     start_load = t.time()
     interpreter = tf.lite.Interpreter(model_path=str(MODEL_PATH), num_threads=num_threads)
     end_load = t.time()
-
     start_alloc = t.time()
     interpreter.allocate_tensors()
     end_alloc = t.time()
@@ -129,7 +129,7 @@ def get_jetson_stats(jt):
     max_v, mean_v, max_c, mean_c = get_voltage_current_stats(jt)
     return max_v, mean_v, max_c, mean_c, pwr
 
-# === PROCESS IMAGES WITH STATS ===
+# === PROCESS IMAGES ===
 def image_processing_inference(interpreter, labels=None, mode="CPU1"):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
@@ -148,14 +148,12 @@ def image_processing_inference(interpreter, labels=None, mode="CPU1"):
 
             img_rgb = cv2.resize(img_raw, (640, 640))
             img_rgb = cv2.cvtColor(img_rgb, cv2.COLOR_BGR2RGB)
-            input_tensor = (np.expand_dims(img_rgb.astype(np.float32) / 255.0, axis=0))
+            input_tensor = np.expand_dims(img_rgb.astype(np.float32) / 255.0, axis=0)
 
             inf_max_v_start, inf_mean_v_start, inf_max_c_start, inf_mean_c_start, inf_pwr_start = get_jetson_stats(jetson)
             inf_start = t.time()
-
             interpreter.set_tensor(input_details[0]["index"], input_tensor)
             interpreter.invoke()
-
             inf_end = t.time()
             inf_max_v_end, inf_mean_v_end, inf_max_c_end, inf_mean_c_end, inf_pwr_end = get_jetson_stats(jetson)
 
@@ -167,14 +165,17 @@ def image_processing_inference(interpreter, labels=None, mode="CPU1"):
             post_end = t.time()
             post_max_v, post_mean_v, post_max_c, post_mean_c, post_pwr = get_jetson_stats(jetson)
 
+            # Latencies
             pre_lat = (inf_start - pre_start) * 1000
             inf_lat = (inf_end - inf_start) * 1000
             post_lat = (post_end - post_start) * 1000
 
+            # Energy (mJ)
             pre_e = pre_pwr * (inf_start - pre_start)
             inf_e = ((inf_pwr_start + inf_pwr_end) / 2) * (inf_end - inf_start)
             post_e = post_pwr * (post_end - post_start)
 
+            # Average volt/current
             inf_max_v = max(inf_max_v_start, inf_max_v_end)
             inf_mean_v = (inf_mean_v_start + inf_mean_v_end) / 2
             inf_max_c = max(inf_max_c_start, inf_max_c_end)
@@ -182,7 +183,7 @@ def image_processing_inference(interpreter, labels=None, mode="CPU1"):
             avg_inf_pwr = (inf_pwr_start + inf_pwr_end) / 2
 
             print(f"""
---- Inference Stats: {img_path.name}
+--- Inference Stats: {img_path.name} ---
 Latencies (ms)   Pre: {pre_lat:.2f} | Inf: {inf_lat:.2f} | Post: {post_lat:.2f}
 Energy (mJ):    Pre: {pre_e:.2f} | Inf: {inf_e:.2f} | Post: {post_e:.2f}
 Power (mW):     Pre: {pre_pwr:.2f} | Inf: {avg_inf_pwr:.2f} | Post: {post_pwr:.2f}
@@ -196,7 +197,7 @@ Current (A):    Pre Max: {pre_max_c:.2f} | Inf Mean: {inf_mean_c:.2f} | Post Max
                 break
 
             append_csv_row(
-                timestamp, img_path.name, "CPU",
+                timestamp, img_path.name, mode,
                 pre_lat, inf_lat, post_lat,
                 pre_e, inf_e, post_e,
                 pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
@@ -204,42 +205,33 @@ Current (A):    Pre Max: {pre_max_c:.2f} | Inf Mean: {inf_mean_c:.2f} | Post Max
                 post_max_v, post_mean_v, post_max_c, post_mean_c,
                 pre_pwr, avg_inf_pwr, post_pwr
             )
+
             t.sleep(1)
 
-# === MAIN ===
+# === MAIN MENU ===
 def menu():
     print("\n--- Select Mode ---\n1: CPU 1 Thread\n2: CPU 4 Threads\n3: GPU\n4: Quit\n")
     choice = input("Enter your choice: ").strip()
-
     if choice == '1':
         interpreter = load_model(num_threads=1)
         mode = "CPU1"
-        init_csv()
-        labels = load_labels(LABEL_MAP)
-        image_processing_inference(interpreter, labels, mode=mode)
-        cv2.destroyAllWindows()
     elif choice == '2':
         interpreter = load_model(num_threads=4)
         mode = "CPU4"
-        init_csv()
-        labels = load_labels(LABEL_MAP)
-        image_processing_inference(interpreter, labels, mode=mode)
-        cv2.destroyAllWindows()
     elif choice == '3':
         interpreter = load_model(num_threads=0)
         mode = "GPU"
-        init_csv()
-        labels = load_labels(LABEL_MAP)
-        image_processing_inference(interpreter, labels, mode=mode)
-        cv2.destroyAllWindows()
     elif choice == '4':
         print("Exiting...")
         exit()
-
     else:
         print("Invalid choice, try again.")
-        menu()
+        return menu()
 
+    init_csv()
+    labels = load_labels(LABEL_MAP)
+    image_processing_inference(interpreter, labels, mode=mode)
+    cv2.destroyAllWindows()
 
 if __name__ == "__main__":
     menu()
