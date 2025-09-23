@@ -13,9 +13,9 @@ match host:
         BASE_PATH = Path(r"E:\Code\Python\ModelHub")
         TEST_IMAGE_BASE_PATH = Path(r"E:\Code\Python\DATASETS\COCO")
     case "CoryPC":
-        BASE_PATH = None # Placeholder value for my laptop
-        TEST_IMAGE_BASE_PATH = None # Placeholder value for my laptop
-    case "nano1-desktop": # Enter the host name of the computer you are working on
+        BASE_PATH = None
+        TEST_IMAGE_BASE_PATH = None
+    case "nano1-desktop":
         BASE_PATH = Path("/home/nano1/anik-lab/ModelHub")
         TEST_IMAGE_BASE_PATH = Path("/home/nano1/anik-lab/coco")
     
@@ -33,7 +33,7 @@ HEADERS = (
     "Pre_Max_V,Pre_Mean_V,Pre_Max_C,Pre_Mean_C,"
     "Inf_Max_V,Inf_Mean_V,Inf_Max_C,Inf_Mean_C,"
     "Post_Max_V,Post_Mean_V,Post_Max_C,Post_Mean_C,"
-    "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW\n"
+    "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW,Memory_mB\n"
 )
 
 def init_csv():
@@ -49,7 +49,7 @@ def append_csv_row(
         pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
         inf_max_v, inf_mean_v, inf_max_c, inf_mean_c,
         post_max_v, post_mean_v, post_max_c, post_mean_c,
-        pre_pwr, inf_pwr, post_pwr      
+        pre_pwr, inf_pwr, post_pwr, memory
 ):
     row = ",".join([
         timestamp,
@@ -60,7 +60,7 @@ def append_csv_row(
         f"{pre_max_v}", f"{pre_mean_v}", f"{pre_max_c}", f"{pre_mean_c}",
         f"{inf_max_v}", f"{inf_mean_v}", f"{inf_max_c}", f"{inf_mean_c}",
         f"{post_max_v}", f"{post_mean_v}", f"{post_max_c}", f"{post_mean_c}",
-        f"{pre_pwr}", f"{inf_pwr}", f"{post_pwr}"
+        f"{pre_pwr}", f"{inf_pwr}", f"{post_pwr}", f"{memory}"
     ]) + "\n"
     with open(OUTPUT_PATH, 'a') as f:
         f.write(row)
@@ -149,6 +149,10 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
             post_time = t.time()
             post_max_v, post_mean_v, post_max_c, post_mean_c, post_pwr = get_jetson_stats(jetson)
 
+            # Memory
+            ram_stats = jetson.stats['RAM']
+            memory = float(ram_stats['used']) if isinstance(ram_stats, dict) else float(ram_stats)
+
             output = interpreter.get_tensor(output_details[0]['index'])[0]
             predicted_index = output.argmax()
             predicted_label = labels[predicted_index]
@@ -201,6 +205,9 @@ Prediction: {predicted_label} ({confidence * 100:.2f}%)
     Pre-processing : {pre_max_c}
     Inference      : {inf_mean_c}
     Post-processing: {post_max_c}
+
+ Memory (MB):
+    {memory}
 """)
 
             t.sleep(1)
@@ -219,7 +226,8 @@ Prediction: {predicted_label} ({confidence * 100:.2f}%)
                 pre_max_v=pre_max_v, pre_mean_v=pre_mean_v, pre_max_c=pre_max_c, pre_mean_c=pre_mean_c,
                 inf_max_v=inf_max_v, inf_mean_v=inf_mean_v, inf_max_c=inf_max_c, inf_mean_c=inf_mean_c,
                 post_max_v=post_max_v, post_mean_v=post_mean_v, post_max_c=post_max_c, post_mean_c=post_mean_c,
-                pre_pwr=pre_pwr, inf_pwr=(inf_pwr_start + inf_pwr_end) / 2, post_pwr=post_pwr
+                pre_pwr=pre_pwr, inf_pwr=(inf_pwr_start + inf_pwr_end) / 2, post_pwr=post_pwr,
+                memory=memory
             )
 
 def menu():
@@ -249,4 +257,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

@@ -13,7 +13,7 @@ match host:
     case "DESKTOP-FI8GT7F":
         BASE_PATH = Path(r"E:\Code\Python\ModelHub")
         TEST_IMAGE_BASE_PATH = Path(r"E:\Code\Python\DATASETS\COCO")
-    case "CoryPC":
+    case "archlinux":
         BASE_PATH = None # Placeholder value for my laptop
         TEST_IMAGE_BASE_PATH = None # Placeholder value for my laptop
     case "nano1-desktop": # Enter the host name of the computer you are working on

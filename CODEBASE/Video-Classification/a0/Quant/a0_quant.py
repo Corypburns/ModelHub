@@ -7,24 +7,25 @@ import cv2, numpy as np
 from jtop import jtop
 
 host = socket.gethostname()
+print(host)
 
 match host:
     case "DESKTOP-FI8GT7F":
         BASE_PATH = Path(r"E:\Code\Python\ModelHub")
         TEST_IMAGE_BASE_PATH = Path(r"E:\Code\Python\DATASETS\COCO")
-    case "CoryPC":
-        BASE_PATH = None
-        TEST_IMAGE_BASE_PATH = None
-    case "nano1-desktop":
+    case "archlinux":
+        BASE_PATH = None # Placeholder value for my laptop
+        TEST_IMAGE_BASE_PATH = None # Placeholder value for my laptop
+    case "nano1-desktop": # Enter the host name of the computer you are working on
         BASE_PATH = Path("/home/nano1/anik-lab/ModelHub")
         TEST_IMAGE_BASE_PATH = Path("/home/nano1/anik-lab/coco")
     
 TEST_IMAGE_PATH = TEST_IMAGE_BASE_PATH / "test2017"
-MODEL_PATH = BASE_PATH / "MODELBASE" / "Image-Classification" / "MobileNetV1-224x224_Quantized" / "mobilenet_v1_1_224_quant.tflite"
-LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "MobileNetV1-224x224_Quantized"
+MODEL_PATH = BASE_PATH / "MODELBASE" / "Video-Classification" / "a0-stream-kinetics-600-classification-tflite-float.tflite"
+LOG_DIR = BASE_PATH / "OUTPUTS" / "Image-Classification" / "EfficientNet_lite4-224x224"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Image-Classification" / "labels.txt"
 DATE_TIME = dt.now().strftime("%y%m%d_%H%M%S")
-FILE_NAME = f"log_MNV1_224x224(quantized)_{DATE_TIME}.csv"
+FILE_NAME = f"log_ENL4_224x224(float)_{DATE_TIME}.csv"
 OUTPUT_PATH = LOG_DIR / FILE_NAME
 HEADERS = (
     "Timestamp,Review,Mode,"
@@ -33,7 +34,7 @@ HEADERS = (
     "Pre_Max_V,Pre_Mean_V,Pre_Max_C,Pre_Mean_C,"
     "Inf_Max_V,Inf_Mean_V,Inf_Max_C,Inf_Mean_C,"
     "Post_Max_V,Post_Mean_V,Post_Max_C,Post_Mean_C,"
-    "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW,Memory_mB\n"
+    "Pre_Pwr_mW,Inf_Pwr_mW,Post_Pwr_mW\n"
 )
 
 def init_csv():
@@ -49,7 +50,7 @@ def append_csv_row(
         pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
         inf_max_v, inf_mean_v, inf_max_c, inf_mean_c,
         post_max_v, post_mean_v, post_max_c, post_mean_c,
-        pre_pwr, inf_pwr, post_pwr, memory
+        pre_pwr, inf_pwr, post_pwr      
 ):
     row = ",".join([
         timestamp,
@@ -60,7 +61,7 @@ def append_csv_row(
         f"{pre_max_v}", f"{pre_mean_v}", f"{pre_max_c}", f"{pre_mean_c}",
         f"{inf_max_v}", f"{inf_mean_v}", f"{inf_max_c}", f"{inf_mean_c}",
         f"{post_max_v}", f"{post_mean_v}", f"{post_max_c}", f"{post_mean_c}",
-        f"{pre_pwr}", f"{inf_pwr}", f"{post_pwr}", f"{memory}"
+        f"{pre_pwr}", f"{inf_pwr}", f"{post_pwr}"
     ]) + "\n"
     with open(OUTPUT_PATH, 'a') as f:
         f.write(row)
@@ -133,7 +134,7 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
             height, width = input_details[0]['shape'][1], input_details[0]['shape'][2]
             resized_img = cv2.resize(raw_img, (width, height))
             rgb_img = cv2.cvtColor(resized_img, cv2.COLOR_BGR2RGB)
-            normalized_img = rgb_img.astype(np.uint8)
+            normalized_img = rgb_img.astype(np.float32) / 255.0
             input_tensor = np.expand_dims(normalized_img, axis=0)
 
             # === Inference Stats Start ===
@@ -149,10 +150,6 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
             post_time = t.time()
             post_max_v, post_mean_v, post_max_c, post_mean_c, post_pwr = get_jetson_stats(jetson)
 
-            # Memory
-            ram_stats = jetson.stats['RAM']
-            memory = float(ram_stats['used']) if isinstance(ram_stats, dict) else float(ram_stats)
-
             output = interpreter.get_tensor(output_details[0]['index'])[0]
             predicted_index = output.argmax()
             predicted_label = labels[predicted_index]
@@ -163,10 +160,12 @@ def image_processing_inference(interpreter, img_path, labels=None, mode="CPU1"):
             inf_lat = (inf_end - inf_start) * 1000
             post_lat = (post_time - inf_end) * 1000
 
+            # Energy = Power (mW) * time (s) = mJ
             pre_energy = pre_pwr * (inf_start - pre_time)
             inf_energy = ((inf_pwr_start + inf_pwr_end) / 2) * (inf_end - inf_start)
             post_energy = post_pwr * (post_time - inf_end)
 
+            # Average voltage/current during inference
             inf_max_v = max(inf_max_v_start, inf_max_v_end)
             inf_mean_v = (inf_mean_v_start + inf_mean_v_end) / 2
             inf_max_c = max(inf_max_c_start, inf_max_c_end)
@@ -203,11 +202,11 @@ Prediction: {predicted_label} ({confidence * 100:.2f}%)
     Pre-processing : {pre_max_c}
     Inference      : {inf_mean_c}
     Post-processing: {post_max_c}
-
- Memory (MB):
-    {memory}
 """)
 
+            t.sleep(1)
+
+            # === Log Results ===
             append_csv_row(
                 timestamp=dt.now().strftime("%Y-%m-%d %H:%M:%S"),
                 review=img_path.name,
@@ -218,25 +217,11 @@ Prediction: {predicted_label} ({confidence * 100:.2f}%)
                 pre_e_mJ=pre_energy,
                 inf_e_mJ=inf_energy,
                 post_e_mJ=post_energy,
-                pre_max_v=pre_max_v,
-                pre_mean_v=pre_mean_v,
-                pre_max_c=pre_max_c,
-                pre_mean_c=pre_mean_c,
-                inf_max_v=inf_max_v,
-                inf_mean_v=inf_mean_v,
-                inf_max_c=inf_max_c,
-                inf_mean_c=inf_mean_c,
-                post_max_v=post_max_v,
-                post_mean_v=post_mean_v,
-                post_max_c=post_max_c,
-                post_mean_c=post_mean_c,
-                pre_pwr=pre_pwr,
-                inf_pwr=(inf_pwr_start + inf_pwr_end) / 2,
-                post_pwr=post_pwr,
-                memory=memory
+                pre_max_v=pre_max_v, pre_mean_v=pre_mean_v, pre_max_c=pre_max_c, pre_mean_c=pre_mean_c,
+                inf_max_v=inf_max_v, inf_mean_v=inf_mean_v, inf_max_c=inf_max_c, inf_mean_c=inf_mean_c,
+                post_max_v=post_max_v, post_mean_v=post_mean_v, post_max_c=post_max_c, post_mean_c=post_mean_c,
+                pre_pwr=pre_pwr, inf_pwr=(inf_pwr_start + inf_pwr_end) / 2, post_pwr=post_pwr
             )
-
-            t.sleep(1)
 
 def menu():
     print("\n--- Select Mode ---\n1: CPU 1 Thread\n2: CPU 4 Threads\n3: CPU 8 Threads\n4: Quit\n")
@@ -265,3 +250,4 @@ def main():
 
 if __name__ == "__main__":
     main()
+

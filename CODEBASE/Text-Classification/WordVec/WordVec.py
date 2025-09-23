@@ -50,7 +50,7 @@ def append_csv_row(
     pre_max_v, pre_mean_v, pre_max_c, pre_mean_c,
     inf_max_v, inf_mean_v, inf_max_c, inf_mean_c,
     post_max_v, post_mean_v, post_max_c, post_mean_c,
-    pre_pwr, inf_pwr, post_pwr
+    pre_pwr, inf_pwr, post_pwr, memory
 ):
     row = ",".join(map(str, [
         timestamp, review, mode,
@@ -152,6 +152,14 @@ def text_classification_step(interpreter, mode="CPU1"):
             post_time = t.time()
             post_max_v, post_mean_v, post_max_c, post_mean_c, post_pwr = get_jetson_stats(jetson)
 
+            stats = jstson.stats
+            ram_stats = stats['RAM']
+
+            if isinstance(ram_stats, dict):
+                ram_used = float(ram_stats.get('used', 0))
+            else:
+                ram_used = float(ram_stats)
+
             # Results
             outputs = interpreter.get_tensor(output_details[0]['index'])
             predicted_class = np.argmax(outputs)
@@ -199,6 +207,8 @@ def text_classification_step(interpreter, mode="CPU1"):
                   f"    Pre-processing : {pre_max_c:.2f}\n"
                   f"    Inference      : {inf_mean_c:.2f}\n"
                   f"    Post-processing: {post_max_c:.2f}\n")
+            print(f" Memory Consumption:\n"
+                  f"    Memory : {ram_stats}")
 
             # === Log to CSV (review as index) ===
             append_csv_row(
@@ -210,14 +220,14 @@ def text_classification_step(interpreter, mode="CPU1"):
                 pre_max_v=pre_max_v, pre_mean_v=pre_mean_v, pre_max_c=pre_max_c, pre_mean_c=pre_mean_c,
                 inf_max_v=inf_max_v, inf_mean_v=inf_mean_v, inf_max_c=inf_max_c, inf_mean_c=inf_mean_c,
                 post_max_v=post_max_v, post_mean_v=post_mean_v, post_max_c=post_max_c, post_mean_c=post_mean_c,
-                pre_pwr=pre_pwr, inf_pwr=inf_pwr, post_pwr=post_pwr
+                pre_pwr=pre_pwr, inf_pwr=inf_pwr, post_pwr=post_pwr, memory=ram_stats
             )
 
             t.sleep(1)
 
 # === MENU ===
 def menu():
-    print("\n--- Select Mode ---\n1: CPU 1 Thread\n2: CPU 4 Threads\n3: CPU 8 Threads\n4: Quit\n")
+    print("\n--- Select Mode ---\n1: CPU 1 Thread\n2: CPU 4 Threads\n3: GPU\n4: Quit\n")
     choice = input("Enter your choice: ").strip()
     if choice == '1':
         interpreter = load_model(num_threads=1)
@@ -226,8 +236,8 @@ def menu():
         interpreter = load_model(num_threads=4)
         text_classification_step(interpreter, mode="CPU4")
     elif choice == '3':
-        interpreter = load_model(num_threads=8)
-        text_classification_step(interpreter, mode="CPU8")
+        interpreter = load_model(num_threads=0)
+        text_classification_step(interpreter, mode="GPU")
     elif choice == '4':
         print("Exiting...")
         exit()
