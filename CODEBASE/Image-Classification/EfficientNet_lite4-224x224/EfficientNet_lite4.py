@@ -5,7 +5,7 @@ import time as t
 import socket
 import cv2
 import numpy as np
-from jtop import jtop
+# from jtop import jtop
 
 # === HOST CONFIG ===
 host = socket.gethostname()
