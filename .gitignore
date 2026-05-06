@@ -1,1 +1,7 @@
 Research
+DATASETS/
+OUTPUTS/
+LABELMAPS/
+.vscode/
+__pycache__/
+MODELBASE/
