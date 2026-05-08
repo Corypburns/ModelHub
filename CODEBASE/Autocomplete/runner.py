@@ -81,7 +81,6 @@ def load_model(model_path, model_type="seq2seq", num_threads=0):
         tuple: The tokenizer and the model.
     """
     if num_threads > 0:
-        tf.config.threading.set_intra_op_parallelism_threads(num_threads)
         tf.config.threading.set_inter_op_parallelism_threads(num_threads)
 
     model_id = str(model_path) if isinstance(model_path, Path) else model_path

@@ -74,7 +74,7 @@ def video_classification_step(interpreter, labels,limit: int):
 
     all_videos = list(TEST_VIDEO_PATH.glob("*.mp4"))
     if limit > 0:
-        all_videos = all_videos[:limit * 20]
+        all_videos = all_videos[:limit * 10]
 
     logger.info("Starting inference on %d videos", len(all_videos))
     logger.info("-" * 50)
