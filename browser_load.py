@@ -194,7 +194,7 @@ def interact(page: Page, url: str):
 # Main workload runner
 # ──────────────────────────────────────────────────────────────────────────────
 
-def run(size: int = 1, urls: list[str] = URLS,):
+def run(size: int = 1, urls: list[str] = URLS, delay: float = 0.0, inference_timer=None):
     """
     Run the full interaction sequence over `urls`, `size` times.
 
@@ -202,9 +202,11 @@ def run(size: int = 1, urls: list[str] = URLS,):
     ----------
     urls : list of URL strings to visit each cycle
     size : number of full cycles (higher = longer run, better for energy averaging)
+    delay : delay between URL visits
+    inference_timer : InferenceTimer instance for timing
     """
     logger.info(f"Starting automation run. Total URLs: {len(urls)}, Cycles: {size}")
-    
+
     with sync_playwright() as p:
         logger.info("Launching chromium browser (headless)...")
         browser = p.chromium.launch(headless=True)
@@ -214,6 +216,8 @@ def run(size: int = 1, urls: list[str] = URLS,):
             logger.info(f"{'='*60}")
             logger.info(f"Cycle {cycle + 1} / {size}")
             logger.info(f"{'='*60}")
+
+            inference_timer.start_cycle() if inference_timer else None
 
             for url in urls:
                 logger.info(f"── Starting interaction loop for: {url}")
@@ -229,15 +233,16 @@ def run(size: int = 1, urls: list[str] = URLS,):
                     interact(page, url)
                     logger.info(f"Successfully completed interaction loop for: {url}")
                 except Exception as e:
-                    # Critical page-level error catching
                     logger.error(f"Critical error during interaction loop for {url}: {e}", exc_info=True)
                 finally:
                     logger.debug(f"Closing page for URL: {url}")
                     page.close()
 
+            inference_timer.end_cycle() if inference_timer else None
+
         logger.info("Closing browser...")
         browser.close()
-        
+
     logger.info("Automation run completed.")
 
 if __name__ == "__main__":

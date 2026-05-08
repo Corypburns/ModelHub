@@ -11,7 +11,6 @@ logger = logging.getLogger(__name__)
 
 NLP_FOLDER = MODEL_BASE_PATH/ "NLP"
 DATASET_PATH = DATA_SETS_PATH / "NLP" / "Train" / "train-v2.0.json"
-delay = 0.5
 # === MODEL FINDER ===
 def find_models(folder_path, extensions=("*.tflite",)):
     """Finds all model files in the specified folder based on extensions."""
@@ -90,17 +89,22 @@ def get_answer(start_logits, end_logits, input_ids):
     return tokenizer.decode(tokens, skip_special_tokens=True)
 
 # === INFERENCE ===
-def bertqa_step(interpreter, samples, size=None):
+def bertqa_step(interpreter, samples, size=None, delay=0.5, inference_timer=None):
     samples_to_process = samples
     if size is not None:
         samples_to_process = samples[:size]
 
     for idx, (question, context, true_answer) in enumerate(samples_to_process, start=1):
+        inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
         inputs = encode(question, context)
+        if inference_timer:
+            inference_timer.start_inference()
         inf_start = t.time()
         start_logits, end_logits = predict(interpreter, inputs)
         inf_end = t.time()
+        if inference_timer:
+            inference_timer.end_inference()
 
         pred_answer = get_answer(start_logits, end_logits, inputs[0])
         inf_lat = (inf_end - inf_start) * 1000
@@ -110,8 +114,9 @@ def bertqa_step(interpreter, samples, size=None):
         logger.info("Prediction: %s", pred_answer)
         logger.info("True Answer: %s", true_answer)
         logger.info("Inference Latency: %.2f ms", inf_lat)
+        inference_timer.end_cycle() if inference_timer else None
 
-def run(mode="CPU1", model=None, size=None):
+def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
     if mode == "CPU1":
         num_threads = 1
     elif mode == "CPU4":
@@ -142,14 +147,16 @@ def run(mode="CPU1", model=None, size=None):
 
     try:
         interpreter = load_model(model_path, num_threads)
-        bertqa_step(interpreter, samples, size=size)
+        bertqa_step(interpreter, samples, size=size, delay=delay, inference_timer=inference_timer)
+        if inference_timer:
+            inference_timer.flush()
     except Exception as e:
         logger.error("Failed to run model %s: %s", model, e)
 
 def main():
     parser = get_base_parser(description="Run NLP Inference")
     args = parser.parse_args()
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()

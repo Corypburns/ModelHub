@@ -14,7 +14,6 @@ from CODEBASE.config import *
 # === CONFIG ===
 VOC_DIR = DATA_SETS_PATH/ "Image-Segmentation" /'VOC_2012'/ 'VOC2012_train_val'
 SEGMENTATION_MODEL_FOLDER = MODEL_BASE_PATH / "Image-Segmentation"
-delay = 0.5
 
 
 # === IMAGE PREPROCESSING ===
@@ -62,7 +61,7 @@ def display_results(original, predicted, ground_truth, pause=3):
     plt.close()
 
 # === PIPELINE ===
-def run(mode, model, size):
+def run(mode, model, size, delay=0.5, inference_timer=None):
 
     mode_map = {
         'CPU1': {'threads': 1, 'str': 'CPU1'},
@@ -70,7 +69,7 @@ def run(mode, model, size):
         'GPU':  {'threads': 0, 'str': 'GPU'}
     }
     model_path = SEGMENTATION_MODEL_FOLDER / f'{model}.tflite'
-    
+
     if not os.path.isfile(model_path):
         logging.error("Model not found at: %s", model_path)
         return
@@ -88,6 +87,7 @@ def run(mode, model, size):
         val_ids = val_ids[:size]
 
     for idx, image_id in enumerate(val_ids):
+        inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
         image_path = VOC_DIR / "JPEGImages" / f"{image_id}.jpg"
         mask_path = VOC_DIR / "SegmentationClass" / f"{image_id}.png"
@@ -98,9 +98,13 @@ def run(mode, model, size):
         input_tensor, original_image = preprocess_image(image_path, (w,h))
         pre_lat = (t.time()-pre_time)*1000
 
+        if inference_timer:
+            inference_timer.start_inference()
         inf_start = t.time()
         pred_map = run_inference(interpreter, input_tensor)
         inf_end = t.time()
+        if inference_timer:
+            inference_timer.end_inference()
         inf_lat = (inf_end-inf_start)*1000
 
         post_time = t.time()
@@ -113,13 +117,17 @@ def run(mode, model, size):
 
         display_results(original_image, predicted_color, ground_truth_color)
         t.sleep(1)
+        inference_timer.end_cycle() if inference_timer else None
+
+    if inference_timer:
+        inference_timer.flush()
 
 
 # === MAIN ===
 def main():
     parser = get_base_parser('Run Deeplab_v3 inference')
     args = parser.parse_args()
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__=="__main__":
     main()

@@ -14,7 +14,6 @@ from CODEBASE.helper_functions import load_model, get_base_parser
 TEST_IMAGE_PATH = DATA_SETS_PATH / 'Image-Classification'/ "test2017"
 MODEL_FOLDER = BASE_PATH / "MODELBASE" / "Object-Detection"
 LABEL_MAP = BASE_PATH / "LABELMAPS" / "Object-Detection" / "labelmap.txt"
-delay = 0.5
 
 # =========================================================
 # LABELS
@@ -67,7 +66,7 @@ def draw_boxes(image, boxes, classes, scores, num_detections, labels):
 # =========================================================
 # INFERENCE
 # =========================================================
-def image_processing_inference(interpreter, labels, size, mode, visualize):
+def image_processing_inference(interpreter, labels, size, mode, visualize, delay=0.5, inference_timer=None):
 
     input_details = interpreter.get_input_details()[0]
     output_details = interpreter.get_output_details()
@@ -87,6 +86,7 @@ def image_processing_inference(interpreter, labels, size, mode, visualize):
     logging.info("-"*60)
 
     for img_path in image_paths:
+        inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
 
         img_raw = cv2.imread(str(img_path))
@@ -96,24 +96,23 @@ def image_processing_inference(interpreter, labels, size, mode, visualize):
         img_resized = cv2.resize(img_raw, (input_w, input_h))
         img_rgb = cv2.cvtColor(img_resized, cv2.COLOR_BGR2RGB)
 
-        # input_tensor = np.expand_dims(img_rgb, axis=0).astype(np.float32)
-
         if input_dtype == np.uint8:
-            # For UINT8 models: Do NOT normalize. Keep 0-255 range.
             input_tensor = np.expand_dims(img_rgb, axis=0).astype(np.uint8)
         else:
             input_tensor = np.expand_dims(img_rgb, axis=0).astype(np.float32)
             input_tensor = input_tensor / 255.0
 
-        # ------------------ INFERENCE ------------------
+        if inference_timer:
+            inference_timer.start_inference()
         start = t.time()
 
         interpreter.set_tensor(input_index, input_tensor)
         interpreter.invoke()
 
         latency = (t.time() - start) * 1000
+        if inference_timer:
+            inference_timer.end_inference()
 
-        # ------------------ OUTPUTS ------------------
         boxes = interpreter.get_tensor(output_details[0]["index"])[0]
         classes = interpreter.get_tensor(output_details[1]["index"])[0]
         scores = interpreter.get_tensor(output_details[2]["index"])[0]
@@ -134,16 +133,10 @@ def image_processing_inference(interpreter, labels, size, mode, visualize):
             cv2.imshow("Detections", drawn)
             cv2.waitKey(1)
 
+        inference_timer.end_cycle() if inference_timer else None
 
-def run(mode, model, size=0, visualize=False):
-    """
-    Programmatic entry point for TFLite model evaluation.
-    
-    Args:
-        mode (str): "CPU1", "CPU4", or "GPU"
-        size (int): Number of images (0 for all)
-        visualize (bool): Whether to show the detection window
-    """
+
+def run(mode, model, size=0, visualize=False, delay=0.5, inference_timer=None):
     labels = load_labels(LABEL_MAP)
 
     mode_map = {
@@ -180,14 +173,17 @@ def run(mode, model, size=0, visualize=False):
             interpreter,
             labels,
             size,
-            config["str"], 
-            visualize
+            config["str"],
+            visualize,
+            delay,
+            inference_timer
         )
+        if inference_timer:
+            inference_timer.flush()
         logging.info("\nFinished model.")
     except Exception as e:
         logging.error(f"Failed to evaluate {model}: {e}")
 
-    # Clean up OpenCV windows if any were opened
     cv2.destroyAllWindows()
 
 # === UPDATED MAIN FOR CLI ===
@@ -196,7 +192,7 @@ def main():
     args = parser.parse_args()
 
     # Call the run method with parsed arguments
-    run(mode=args.mode, model=args.model, size=args.size, visualize=args.visualize)
+    run(mode=args.mode, model=args.model, size=args.size, visualize=args.visualize, delay=args.delay)
 
 if __name__ == "__main__":
     main()

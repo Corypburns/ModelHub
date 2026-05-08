@@ -2,7 +2,7 @@ import socket
 import json
 import time
 import traceback
-from CODEBASE.helper_functions import EnergyMonitor
+from CODEBASE.helper_functions import EnergyMonitor, InferenceTimer
 from CODEBASE.Autocomplete.runner import run as autocomplete_run
 from CODEBASE.Image_Classification.img_classification_runner import run as image_classification_run
 from CODEBASE.Image_Segmentation.Deeplab_v3 import run as image_segmentation_run
@@ -48,13 +48,14 @@ id_to_app  = [
 
 def run_ai(app_id, size, mode, model, delay):
     app = id_to_app[app_id]
+    inference_timer = InferenceTimer(app["name"].replace(" ", "_"), model, mode)
     with jtop(0.4) as jt:
         monitor = EnergyMonitor(jt, interval=0.5, output_file=f"logs/{app['name'].replace(' ', '_')}/{model}_{mode}.csv")
         monitor.start()
         try:
             print(f"Running app {app['name']} with size {size}")
             start = time.perf_counter()
-            app['run'](size=size,model=model, mode=mode)
+            app['run'](size=size, model=model, mode=mode, delay=delay, inference_timer=inference_timer)
             duration = time.perf_counter() - start
         finally:
             monitor.stop()

@@ -10,12 +10,15 @@ from browser_load import run as run_browser_load
 # Non-AI Application Runners (10 total)
 # -----------------------------
 
-def run_stress_cpu(size=1, **kwargs):
+def run_stress_cpu(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     duration = size
     subprocess.run(["stress-ng", "--cpu", "4", "--timeout", f"{duration}s"], check=True)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_fio_disk(size=1, **kwargs):
+def run_fio_disk(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     filename = "fio_test_file"
     subprocess.run([
         "fio",
@@ -30,18 +33,22 @@ def run_fio_disk(size=1, **kwargs):
     ], check=True)
     if os.path.exists(filename):
         os.remove(filename)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_sysbench_cpu(size=1, **kwargs):
+def run_sysbench_cpu(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     subprocess.run([
         "sysbench",
         "cpu",
         f"--cpu-max-prime={2500 * size}",
         "run"
     ], check=True)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_dd_write(size=1, **kwargs):
+def run_dd_write(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     filename = "dd_test_file"
     subprocess.run([
         "dd",
@@ -52,14 +59,17 @@ def run_dd_write(size=1, **kwargs):
     ], check=True)
     if os.path.exists(filename):
         os.remove(filename)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_ping(size=1, **kwargs):
+def run_ping(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     subprocess.run(["ping", "-c", str(size * 3), "8.8.8.8"], check=True)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_ffmpeg(size=1, **kwargs):
-    # Generate synthetic video and encode
+def run_ffmpeg(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     output = "test.mp4"
     subprocess.run([
         "ffmpeg", "-y",
@@ -71,16 +81,20 @@ def run_ffmpeg(size=1, **kwargs):
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     if os.path.exists(output):
         os.remove(output)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_openssl(size=1, **kwargs):
+def run_openssl(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     subprocess.run([
         "openssl", "speed",
         "-seconds", str(size / 2)
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_gzip(size=1, **kwargs):
+def run_gzip(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     filename = "gzip_test"
     with open(filename, "wb") as f:
         f.write(os.urandom( 5 * 1024 *  1024 * size))
@@ -88,20 +102,24 @@ def run_gzip(size=1, **kwargs):
     for f in [filename, filename + ".gz"]:
         if os.path.exists(f):
             os.remove(f)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_make(size=1, **kwargs):
-    # Simulate compilation workload
+def run_make(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     subprocess.run(["make", "-j", str(250 * size)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    inference_timer.end_cycle() if inference_timer else None
 
 
-def run_sqlite(size=1, **kwargs):
+def run_sqlite(size=1, inference_timer=None, **kwargs):
+    inference_timer.start_cycle() if inference_timer else None
     db = "test.db"
-    subprocess.run(["sqlite3", db, "CREATE TABLE t (id INT, val TEXT);"]) 
+    subprocess.run(["sqlite3", db, "CREATE TABLE t (id INT, val TEXT);"])
     for i in range(100 * size):
         subprocess.run(["sqlite3", db, f"INSERT INTO t VALUES({i}, 'data');"], stdout=subprocess.DEVNULL)
     if os.path.exists(db):
         os.remove(db)
+    inference_timer.end_cycle() if inference_timer else None
 
 
 class AppType(Enum):
@@ -137,18 +155,23 @@ run_map = {
 # -----------------------------
 # Runner Logic
 # -----------------------------
-def run(mode, model, size):
+def run(mode, model, size, delay=0.5, inference_timer=None):
     app = run_map[model]
     print(f'Running {app["name"]}')
-    app['run'](size)
+    if model == "Web Browsing":
+        run_browser_load(size=size, delay=delay, inference_timer=inference_timer)
+    else:
+        app['run'](size, delay=delay, inference_timer=inference_timer)
     print(f'Finished with {app["name"]}')
+    if inference_timer:
+        inference_timer.flush()
 
 
 def main():
     parser = get_base_parser('Run Non AI applications')
     args = parser.parse_args()
 
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()

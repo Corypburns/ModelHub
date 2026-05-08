@@ -7,6 +7,8 @@ import time as t
 import time
 import numpy as np
 from dataclasses import asdict, dataclass, field
+from datetime import datetime, timedelta
+from pathlib import Path
 import numpy as np
 import tensorflow as tf
 from .config import *
@@ -55,11 +57,18 @@ def get_base_parser(description="TFLite Inference Script"):
         help="Enable visualization window"
     )
     parser.add_argument(
-        '--model', 
+        '--model',
         default='None',
         help="File name of the specific model to run"
     )
-    
+
+    parser.add_argument(
+        '-d', '--delay',
+        type=float,
+        default=0.5,
+        help="Delay between iterations in seconds (default: 0.5)"
+    )
+
     return parser
 
 
@@ -298,6 +307,73 @@ def avg_measurement(measurements: list[Measurements]):
         float(maxes[1]),  # max_c
         float(means[6]),  # mean_c
     )
+
+
+class InferenceTimer:
+    _header = ["cycle", "start_iso", "end_iso", "inference_s", "total_s"]
+
+    def __init__(self, app_name: str, model: str, mode: str):
+        self.app_name = app_name
+        self.model = model
+        self.mode = mode
+        self._rows: list[dict] = []
+        self._file_path: str | None = None
+        self._cycle = 0
+        self._total_start: float | None = None
+        self._inference_start: float | None = None
+
+    def _ensure_path(self):
+        if self._file_path is not None:
+            return
+        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
+        base = Path.cwd() / "logs" / ts / self.app_name / self.model / self.mode
+        base.mkdir(parents=True, exist_ok=True)
+        self._file_path = str(base / "inference_timings.csv")
+
+    def start_cycle(self) -> int:
+        self._ensure_path()
+        self._cycle += 1
+        self._total_start = time.perf_counter()
+        return self._cycle
+
+    def start_inference(self):
+        self._inference_start = time.perf_counter()
+
+    def end_inference(self):
+        if self._inference_start is None:
+            return
+        self._inference_start = None
+
+    def end_cycle(self):
+        if self._total_start is None:
+            return
+        total_elapsed = time.perf_counter() - self._total_start
+        inf_elapsed = total_elapsed
+        if self._inference_start is not None:
+            inf_elapsed = time.perf_counter() - self._inference_start
+            self._inference_start = None
+        self._total_start = None
+
+        now = datetime.now()
+        self._rows.append({
+            "cycle": self._cycle,
+            "start_iso": (now - timedelta(seconds=total_elapsed)).isoformat(),
+            "end_iso": now.isoformat(),
+            "inference_s": round(inf_elapsed, 6),
+            "total_s": round(total_elapsed, 6),
+        })
+
+    def flush(self):
+        if not self._rows or self._file_path is None:
+            return
+        with open(self._file_path, "w", newline="") as f:
+            writer = csv.DictWriter(f, fieldnames=self._header)
+            writer.writeheader()
+            writer.writerows(self._rows)
+        logging.info("Inference timings saved to %s", self._file_path)
+
+    def __del__(self):
+        self.flush()
 
 MAX_RETRIES = 5
 RETRY_DELAY = 0.3

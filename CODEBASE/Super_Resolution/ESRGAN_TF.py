@@ -12,7 +12,6 @@ logger = logging.getLogger("esrgan_tf")
 
 IMAGE_PATH = DATA_SETS_PATH / "Super-Resolution"
 SUPER_RESOLUTION_FOLDER = MODEL_BASE_PATH / "Super-Resolution"
-delay = 0.5
 # === MODEL FINDER ===
 def find_models(folder_path, extensions=("*.tflite",)):
     """Finds all model files in the specified folder based on extensions."""
@@ -67,7 +66,7 @@ def run_inference(interpreter, img_path):
 
     mpl.show()
 
-def run(mode="CPU1", model=None, size=None):
+def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
     if mode == "CPU1":
         num_threads = 1
     elif mode == "CPU4":
@@ -99,8 +98,12 @@ def run(mode="CPU1", model=None, size=None):
     try:
         interpreter = load_model(model_path, num_threads)
         for img_path in image_files:
+            inference_timer.start_cycle() if inference_timer else None
             t.sleep(delay)
             run_inference(interpreter, img_path)
+            inference_timer.end_cycle() if inference_timer else None
+        if inference_timer:
+            inference_timer.flush()
     except Exception as e:
         logger.error("Failed during inference for model %s: %s", model, e)
 
@@ -108,7 +111,7 @@ def main():
     parser = get_base_parser('Run Super-Resolution Inference')
     args = parser.parse_args()
 
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()

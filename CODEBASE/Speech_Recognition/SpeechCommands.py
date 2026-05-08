@@ -16,7 +16,6 @@ logger = logging.getLogger(__name__)
 TEST_AUDIO_BASE_PATH = DATA_SETS_PATH/ "Speech-Recognition"
 SPEECH_RECOGNITION_FOLDER = MODEL_BASE_PATH/ "Speech-Recognition"
 LABEL_MAP = LABEL_MAPS_PATH / "Speech-Recognition" / "conv_actions_labels.txt"
-delay = 0.5
 
 # === MODEL FINDER ===
 def find_models(folder_path):
@@ -98,7 +97,7 @@ def load_model(model_path, mode="CPU1"):
 
 
 # === RUN INFERENCE ===
-def run_tflite_inference(interpreter, input_details, output_details, labels, audio_files):
+def run_tflite_inference(interpreter, input_details, output_details, labels, audio_files, delay=0.5, inference_timer=None):
     audio_input = next(
         t for t in input_details if "sample_data" in t["name"] and t["dtype"] == np.float32
     )
@@ -110,21 +109,27 @@ def run_tflite_inference(interpreter, input_details, output_details, labels, aud
     logger.info("Rate input  : idx=%d shape=%s", rate_input["index"], rate_input["shape"])
 
     for wav_path in audio_files:
+        inference_timer.start_cycle() if inference_timer else None
         time.sleep(delay)
         waveform = preprocess_audio(wav_path, target_sample_rate=16000, input_details=input_details)
 
+        if inference_timer:
+            inference_timer.start_inference()
         interpreter.set_tensor(audio_input["index"], waveform)
         interpreter.set_tensor(rate_input["index"], np.array([16000], dtype=np.int32))
         interpreter.invoke()
+        if inference_timer:
+            inference_timer.end_inference()
 
         output_data = interpreter.get_tensor(output_details[0]["index"])
         pred_index = int(np.argmax(output_data))
         pred_label = labels[pred_index] if labels else str(pred_index)
 
         logger.info("%s | Predicted: %s", wav_path.name, pred_label)
+        inference_timer.end_cycle() if inference_timer else None
 
 
-def run(mode="CPU1", model=None, size=None):
+def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
     labels = load_labels(LABEL_MAP)
 
     model_path = SPEECH_RECOGNITION_FOLDER / f"{model}.tflite"
@@ -144,7 +149,9 @@ def run(mode="CPU1", model=None, size=None):
     logger.info("--- Testing Model: %s ---", model_path.name)
     try:
         interpreter, input_details, output_details = load_model(model_path, mode)
-        run_tflite_inference(interpreter, input_details, output_details, labels, audio_files)
+        run_tflite_inference(interpreter, input_details, output_details, labels, audio_files, delay=delay, inference_timer=inference_timer)
+        if inference_timer:
+            inference_timer.flush()
     except Exception as e:
         logger.error("Failed to run model %s: %s", model_path.name, e, exc_info=True)
 
@@ -152,7 +159,7 @@ def run(mode="CPU1", model=None, size=None):
 def main():
     parser = get_base_parser("Run Speech Recognition Inference")
     args = parser.parse_args()
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 
 if __name__ == "__main__":

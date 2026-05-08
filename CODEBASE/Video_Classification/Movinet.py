@@ -13,7 +13,6 @@ logger = logging.getLogger(__name__)
 TEST_VIDEO_PATH = DATA_SETS_PATH / "Video-Classification" / "kinetics_600_5000"
 MODEL_DIR = MODEL_BASE_PATH / "Video-Classification"
 LABELS_PATH = LABEL_MAPS_PATH / "Video-Classification" / "kinetics_600_labels.txt"
-delay = 0.5
 
 def load_labels(label_path):
     # Load model labels safely
@@ -26,12 +25,12 @@ def load_labels(label_path):
     return labels
 
 # === INFERENCE STEP ===
-def video_classification_step(interpreter, labels,limit: int):
+def video_classification_step(interpreter, labels, limit: int, delay=0.5, inference_timer=None):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
 
     input_index = None
-    height, width = 224, 224  # fallback defaults
+    height, width = 224, 224
     is_streaming = False
 
     for item in input_details:
@@ -43,11 +42,11 @@ def video_classification_step(interpreter, labels,limit: int):
 
         if len(shape) >= 4 and shape[-1] == 3:
             input_index = detail.get("index")
-            if len(shape) == 5:  # Streaming model [1, 1, H, W, 3]
+            if len(shape) == 5:
                 logger.info("Detected streaming input shape %s", shape)
                 height, width = int(shape[2]), int(shape[3])
                 is_streaming = True
-            elif len(shape) == 4:  # Standard model [1, H, W, 3]
+            elif len(shape) == 4:
                 height, width = int(shape[1]), int(shape[2])
                 is_streaming = False
             break
@@ -80,6 +79,7 @@ def video_classification_step(interpreter, labels,limit: int):
     logger.info("-" * 50)
 
     for img_path in all_videos:
+        inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
         cap = cv2.VideoCapture(str(img_path))
         ret, raw_img = cap.read()
@@ -92,10 +92,8 @@ def video_classification_step(interpreter, labels,limit: int):
         resized_img = cv2.resize(raw_img, (width, height))
         rgb_img = cv2.cvtColor(resized_img, cv2.COLOR_BGR2RGB)
 
-        # input_tensor = np.expand_dims(rgb_img.astype(np.float32) / 255.0, axis=0)
         input_dtype = input_details[0]["dtype"]
         if input_dtype == np.uint8:
-            # For UINT8 models: Do NOT normalize. Keep 0-255 range.
             input_tensor = np.expand_dims(rgb_img, axis=0).astype(np.uint8)
         else:
             input_tensor = np.expand_dims(rgb_img, axis=0).astype(np.float32)
@@ -103,12 +101,16 @@ def video_classification_step(interpreter, labels,limit: int):
         if is_streaming:
             input_tensor = np.expand_dims(input_tensor, axis=1)
 
+        if inference_timer:
+            inference_timer.start_inference()
         inf_start = t.time()
 
         interpreter.set_tensor(input_index, input_tensor)
         interpreter.invoke()
 
         inf_end = t.time()
+        if inference_timer:
+            inference_timer.end_inference()
 
         raw_output = interpreter.get_tensor(output_index)
         output = np.array(raw_output).flatten()
@@ -129,19 +131,13 @@ def video_classification_step(interpreter, labels,limit: int):
             confidence * 100,
             inf_lat,
         )
+        inference_timer.end_cycle() if inference_timer else None
 
-def run(mode, model, size=0):
-    """
-    Programmatic entry point for Video Classification Inference.
-
-    Args:
-        mode (str): "CPU1", "CPU4", or "GPU"
-        size (int): Number of videos/samples to process (0 for all)
-    """
+def run(mode, model, size=0, delay=0.5, inference_timer=None):
     labels = load_labels(LABELS_PATH)
 
     model_path = MODEL_DIR / f"{model}.tflite"
-    
+
     if not os.path.isfile(model_path):
         logger.error("Model not found at: %s", model_path)
         return
@@ -160,7 +156,9 @@ def run(mode, model, size=0):
 
     try:
         interpreter = load_model(model_path, num_threads=num_threads)
-        video_classification_step(interpreter, labels, limit=size)
+        video_classification_step(interpreter, labels, limit=size, delay=delay, inference_timer=inference_timer)
+        if inference_timer:
+            inference_timer.flush()
         logger.info("Finished evaluation for %s", model_path.name)
     except Exception as e:
         logger.exception("Failed to evaluate %s", model)
@@ -169,7 +167,7 @@ def run(mode, model, size=0):
 def main():
     parser = get_base_parser('Run Video Classification Inference')
     args = parser.parse_args()
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()

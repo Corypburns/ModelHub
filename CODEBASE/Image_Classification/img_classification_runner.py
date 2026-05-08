@@ -13,16 +13,13 @@ IMAGE_CLASSIFICATION_FOLDER = MODEL_BASE_PATH / "Image-Classification"
 TEST_IMAGE_PATH = DATA_SETS_PATH / "Image-Classification" / "test2017"
 LABEL_MAP = LABEL_MAPS_PATH / "Image-Classification" / "labels.txt"
 
-delay = 0.5
-
 logger = logging.getLogger(__name__)
 
 def load_labels(label_path):
     with open(label_path, "r") as f:
         return [line.strip() for line in f.readlines()]
 
-def run_inference(interpreter, labels, size, mode="CPU1"):
-    # get_input_details() returns a LIST of dictionaries
+def run_inference(interpreter, labels, size, mode="CPU1", delay=0.5, inference_timer=None):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
     height, width = input_details[0]['shape'][1], input_details[0]['shape'][2]
@@ -33,6 +30,7 @@ def run_inference(interpreter, labels, size, mode="CPU1"):
         image_paths = image_paths[:size]
 
     for img_path in image_paths:
+        cycle = inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
         raw_img = cv2.imread(str(img_path))
         if raw_img is None:
@@ -41,8 +39,7 @@ def run_inference(interpreter, labels, size, mode="CPU1"):
 
         resized_img = cv2.resize(raw_img, (width, height))
         rgb_img = cv2.cvtColor(resized_img, cv2.COLOR_BGR2RGB)
-        
-        
+
         input_dtype = input_details[0]["dtype"]
         if input_dtype in [np.uint8, tf.uint8]:
             input_tensor = np.expand_dims(rgb_img, axis=0).astype(np.uint8)
@@ -50,13 +47,18 @@ def run_inference(interpreter, labels, size, mode="CPU1"):
             input_tensor = np.expand_dims(rgb_img.astype(np.float32) - 128.0, axis=0).astype(np.int8)
         else:
             input_tensor = np.expand_dims(rgb_img.astype(np.float32) / 255.0, axis=0)
-        
+
+        if inference_timer:
+            inference_timer.start_inference()
         inf_start = t.time()
 
         interpreter.set_tensor(input_details[0]['index'], input_tensor)
         interpreter.invoke()
 
         inf_end = t.time()
+
+        if inference_timer:
+            inference_timer.end_inference()
 
         output = interpreter.get_tensor(output_details[0]['index'])[0]
         predicted_index = output.argmax()
@@ -73,8 +75,10 @@ def run_inference(interpreter, labels, size, mode="CPU1"):
         )
 
         t.sleep(1)
+        if inference_timer:
+            inference_timer.end_cycle()
 
-def run(mode,  model: str, size=0,):
+def run(mode, model: str, size=0, delay=0.5, inference_timer=None):
     labels = load_labels(LABEL_MAP)
     model_path = IMAGE_CLASSIFICATION_FOLDER / f'{model}.tflite'
     if not os.path.isfile(model_path):
@@ -100,13 +104,15 @@ def run(mode,  model: str, size=0,):
     logger.info("%s", "=" * 20)
 
     interpreter = load_model(model_path, num_threads=config["threads"])
-    run_inference(interpreter, labels, size, mode=config["str"])
+    run_inference(interpreter, labels, size, mode=config["str"], delay=delay, inference_timer=inference_timer)
+    if inference_timer:
+        inference_timer.flush()
 
 def main():
     parser = get_base_parser('Run Image Classification Models')
     args = parser.parse_args()
 
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()

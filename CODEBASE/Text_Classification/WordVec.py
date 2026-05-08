@@ -10,7 +10,6 @@ from CODEBASE.helper_functions import load_model, get_base_parser
 DATASET_PATH = DATA_SETS_PATH/ "Text-Classification" / "WordVec" / "IMDB_Dataset.csv"
 TEXT_CLASSIFICATION_FOLDER = MODEL_BASE_PATH / "Text-Classification"
 
-delay = 0.5
 logger = logging.getLogger(__name__)
 
 # === MODEL FINDER ===
@@ -44,7 +43,7 @@ def truncation(seq, max_length: int, pad_value: int = 0, direction: str = "post"
 
 
 # === INFERENCE ===
-def text_classification_step(interpreter, data, vocab, size=None):
+def text_classification_step(interpreter, data, vocab, size=None, delay=0.5, inference_timer=None):
     input_details = interpreter.get_input_details()
     output_details = interpreter.get_output_details()
     max_vocab_length = 9999
@@ -55,16 +54,21 @@ def text_classification_step(interpreter, data, vocab, size=None):
         reviews_to_process = reviews_to_process[:size * 20]
 
     for idx, review in enumerate(reviews_to_process, start=1):
+        inference_timer.start_cycle() if inference_timer else None
         t.sleep(delay)
         tokens = str(review).lower().split()
         id_seq = [min(vocab.get(w, 0), max_vocab_length) for w in tokens]
         id_seq = truncation(id_seq, max_length, direction="pre")
         input_array = np.array([id_seq], dtype=np.int32)
 
+        if inference_timer:
+            inference_timer.start_inference()
         inf_start = t.time()
         interpreter.set_tensor(input_details[0]["index"], input_array)
         interpreter.invoke()
         inf_end = t.time()
+        if inference_timer:
+            inference_timer.end_inference()
 
         outputs = interpreter.get_tensor(output_details[0]["index"])
         predicted_class = np.argmax(outputs)
@@ -81,8 +85,9 @@ def text_classification_step(interpreter, data, vocab, size=None):
 
         snippet = str(review)[:80] + "..." if len(str(review)) > 80 else str(review)
         logger.info('  -> "%s"', snippet)
+        inference_timer.end_cycle() if inference_timer else None
 
-def run(mode="CPU1", model= None, size=None):
+def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
     if mode == "CPU1":
         num_threads = 1
     elif mode == "CPU4":
@@ -108,7 +113,9 @@ def run(mode="CPU1", model= None, size=None):
 
     try:
         interpreter = load_model(model_path, num_threads)
-        text_classification_step(interpreter, data, vocab, size=size)
+        text_classification_step(interpreter, data, vocab, size=size, delay=delay, inference_timer=inference_timer)
+        if inference_timer:
+            inference_timer.flush()
     except Exception as e:
         logger.error("Failed to process model %s: %s", model, e)
    
@@ -117,7 +124,7 @@ def run(mode="CPU1", model= None, size=None):
 def main():
     parser = get_base_parser("Run Text Classification Inference")
     args = parser.parse_args()
-    run(mode=args.mode, model=args.model, size=args.size)
+    run(mode=args.mode, model=args.model, size=args.size, delay=args.delay)
 
 if __name__ == "__main__":
     main()
