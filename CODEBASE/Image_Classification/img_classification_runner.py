@@ -6,8 +6,8 @@ import cv2
 import numpy as np
 import logging
 
-from model_hub.CODEBASE.helper_functions import get_base_parser, load_model
-from model_hub.CODEBASE.config import *
+from CODEBASE.helper_functions import get_base_parser, load_model
+from CODEBASE.config import *
 
 IMAGE_CLASSIFICATION_FOLDER = MODEL_BASE_PATH / "Image-Classification"
 TEST_IMAGE_PATH = DATA_SETS_PATH / "Image-Classification" / "test2017"

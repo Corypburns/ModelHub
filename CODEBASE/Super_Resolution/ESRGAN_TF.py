@@ -5,8 +5,8 @@ import matplotlib.pyplot as mpl
 import cv2
 import time as t
 
-from model_hub.CODEBASE.config import *
-from model_hub.CODEBASE.helper_functions import load_model, get_base_parser
+from CODEBASE.config import *
+from CODEBASE.helper_functions import load_model, get_base_parser
 
 logger = logging.getLogger("esrgan_tf")
 

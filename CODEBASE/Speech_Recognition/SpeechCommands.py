@@ -6,8 +6,8 @@ import tensorflow as tf
 import soundfile as sf
 import logging
 
-from model_hub.CODEBASE.helper_functions import get_base_parser
-from  model_hub.CODEBASE.config import *
+from CODEBASE.helper_functions import get_base_parser
+from  CODEBASE.config import *
 
 
 logger = logging.getLogger(__name__)

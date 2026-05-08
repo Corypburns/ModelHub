@@ -4,8 +4,8 @@ import time as t
 import numpy as np
 import pandas as pd
 import logging
-from model_hub.CODEBASE.config import *
-from model_hub.CODEBASE.helper_functions import load_model, get_base_parser
+from CODEBASE.config import *
+from CODEBASE.helper_functions import load_model, get_base_parser
 
 DATASET_PATH = DATA_SETS_PATH/ "Text-Classification" / "WordVec" / "IMDB_Dataset.csv"
 TEXT_CLASSIFICATION_FOLDER = MODEL_BASE_PATH / "Text-Classification"

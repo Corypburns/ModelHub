@@ -4,8 +4,8 @@ import tensorflow as tf
 import time as t
 import cv2, numpy as np
 import logging
-from model_hub.CODEBASE.config import *
-from model_hub.CODEBASE.helper_functions import load_model, get_base_parser
+from CODEBASE.config import *
+from CODEBASE.helper_functions import load_model, get_base_parser
 
 logger = logging.getLogger(__name__)
 

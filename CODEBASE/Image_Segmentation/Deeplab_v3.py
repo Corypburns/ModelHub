@@ -7,8 +7,8 @@ import time as t
 import matplotlib.pyplot as plt
 import logging
 
-from model_hub.CODEBASE.helper_functions import get_base_parser
-from model_hub.CODEBASE.config import *
+from CODEBASE.helper_functions import get_base_parser
+from CODEBASE.config import *
 
 
 # === CONFIG ===

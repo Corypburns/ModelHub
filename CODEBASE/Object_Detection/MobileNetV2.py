@@ -7,8 +7,8 @@ import numpy as np
 import argparse
 import logging
 
-from model_hub.CODEBASE.config import *
-from model_hub.CODEBASE.helper_functions import load_model, get_base_parser
+from CODEBASE.config import *
+from CODEBASE.helper_functions import load_model, get_base_parser
 
 # === CONFIG ===
 TEST_IMAGE_PATH = DATA_SETS_PATH / 'Image-Classification'/ "test2017"

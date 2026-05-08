@@ -10,8 +10,8 @@ import time as t
 from datasets import load_dataset
 import logging
 import json
-from model_hub.CODEBASE.config import *
-from model_hub.CODEBASE.helper_functions import get_base_parser
+from CODEBASE.config import *
+from CODEBASE.helper_functions import get_base_parser
 delay = 0.5
 
 # === CONFIG ===

@@ -55,5 +55,5 @@ def run_all_benchmarks(root_directory, mode="CPU1", size=3):
         print(f"\n[INFO] Finished attempt for {script_path.name}\n")
 
 if __name__ == "__main__":
-    target_dir = "/home/mallik-lab-seed-nx16/anik-lab/fingerprinting/model_hub/CODEBASE" 
+    target_dir = "/home/mallik-lab-seed-nx16/anik-lab/fingerprinting//CODEBASE" 
     run_all_benchmarks(target_dir, mode="CPU1", size=3)
