@@ -1,3 +1,4 @@
+from datetime import datetime
 import socket
 import json
 import time
@@ -46,9 +47,9 @@ id_to_app  = [
     {'name': 'Non_AI', 'run': ModelType.Non_AI}
 ]
 
-def run_ai(app_id, size, mode, model, delay):
+def run_ai(app_id, size, mode, model, delay, ts):
     app = id_to_app[app_id]
-    inference_timer = InferenceTimer(app["name"].replace(" ", "_"), model, mode)
+    inference_timer = InferenceTimer(app["name"].replace(" ", "_"), model, mode, ts)
     with jtop(0.4) as jt:
         monitor = EnergyMonitor(jt, interval=0.5, output_file=f"logs/{app['name'].replace(' ', '_')}/{model}_{mode}.csv")
         monitor.start()
@@ -64,10 +65,10 @@ def run_ai(app_id, size, mode, model, delay):
     return duration
 
 
-def handle_client(conn):
+def handle_client(conn, ts):
     with conn:
         print("Client connected")
-   
+       
         while True:
             data = conn.recv(4096)
             if not data:
@@ -75,7 +76,7 @@ def handle_client(conn):
             try:
                 msg = json.loads(data.decode())
                 if msg["cmd"] == "run":                    
-                    duration = run_ai(msg["app_id"], msg["size"], msg["mode"], msg['model'], delay=msg.get("delay", 0))
+                    duration = run_ai(msg["app_id"], msg["size"], msg["mode"], msg['model'], delay=msg.get("delay", 0), ts=ts)
 
                     conn.sendall(json.dumps({
                         "status": "finished",
@@ -94,7 +95,7 @@ with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
     s.listen()
 
     print("Jetson server listening...")
-
+    ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
     while True:
         conn, addr = s.accept()
-        handle_client(conn)
+        handle_client(conn, ts)

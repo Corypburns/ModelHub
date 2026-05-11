@@ -38,7 +38,7 @@ URLS = [
 # Interaction helpers
 # ──────────────────────────────────────────────────────────────────────────────
 
-def smooth_scroll(page: Page, direction: str = "down", steps: int = 5, delay: float = 0.12):
+def smooth_scroll(page: Page, direction: str = "down", steps: int = 2, delay: float = 0.12):
     """Scroll incrementally to simulate a real user."""
     logger.debug(f"Starting smooth scroll. Direction: {direction}, Steps: {steps}")
     try:
@@ -68,7 +68,7 @@ def hover_links(page: Page, count: int = 8):
                 break
             try:
                 if link.is_visible():
-                    link.hover(timeout=1000)
+                    link.hover(timeout=500)
                     time.sleep(0.1)
                     hovered += 1
             except Exception as e:
@@ -99,12 +99,12 @@ def click_and_back(page: Page) -> bool:
                 continue
             
             target = random.choice(visible[:10])
-            target.click(timeout=3000)
+            target.click(timeout=500)
             logger.info(f"Clicked element using selector '{selector}'. Navigating back...")
             time.sleep(1.0)
             
-            page.go_back(timeout=8000)
-            page.wait_for_load_state("load", timeout=8000)
+            page.go_back(timeout=2000)
+            page.wait_for_load_state("load", timeout=2000)
             return True
         except Exception as e:
             logger.warning(f"Failed interacting with selector '{selector}': {e}", exc_info=True)
@@ -131,7 +131,7 @@ def type_in_search(page: Page) -> bool:
         try:
             box = page.query_selector(sel)
             if box and box.is_visible():
-                box.click(timeout=2000)
+                box.click(timeout=1000)
                 box.type("open source software", delay=70)   # 70 ms per char
                 logger.info(f"Successfully typed in search box using selector '{sel}'.")
                 time.sleep(0.5)
@@ -154,7 +154,7 @@ def interact(page: Page, url: str):
     """Full interaction sequence for one URL."""
     # 1. Load page
     logger.info(f"Loading URL: {url}")
-    page.goto(url, wait_until="load", timeout=30000) # Increased timeout safety to 30s as 3s is very low
+    page.goto(url, wait_until="load", timeout=10000) # Increased timeout safety to 30s as 3s is very low
     time.sleep(0.5)
 
     # 2. Scroll to bottom

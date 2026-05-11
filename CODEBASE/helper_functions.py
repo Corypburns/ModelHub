@@ -312,7 +312,7 @@ def avg_measurement(measurements: list[Measurements]):
 class InferenceTimer:
     _header = ["cycle", "start_iso", "end_iso", "inference_s", "total_s"]
 
-    def __init__(self, app_name: str, model: str, mode: str):
+    def __init__(self, app_name: str, model: str, mode: str, ts):
         self.app_name = app_name
         self.model = model
         self.mode = mode
@@ -321,12 +321,13 @@ class InferenceTimer:
         self._cycle = 0
         self._total_start: float | None = None
         self._inference_start: float | None = None
+        self._ts = ts
+
 
     def _ensure_path(self):
         if self._file_path is not None:
             return
-        ts = datetime.now().strftime("%Y-%m-%d_%H-%M-%S")
-        base = Path.cwd() / "logs" / ts / self.app_name / self.model / self.mode
+        base = Path.cwd() / "logs" / self._ts / self.app_name / self.model / self.mode
         base.mkdir(parents=True, exist_ok=True)
         self._file_path = str(base / "inference_timings.csv")
 

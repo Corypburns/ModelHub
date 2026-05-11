@@ -87,7 +87,7 @@ def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
         return
 
     if size is not None:
-        image_files = image_files[:size * 40]
+        image_files = image_files[:size * 100]
 
     logger.info("Mode: %s | Found %d image(s).", mode, len(image_files))
 
@@ -98,8 +98,8 @@ def run(mode="CPU1", model=None, size=None, delay=0.5, inference_timer=None):
     try:
         interpreter = load_model(model_path, num_threads)
         for img_path in image_files:
-            inference_timer.start_cycle() if inference_timer else None
             t.sleep(delay)
+            inference_timer.start_cycle() if inference_timer else None
             run_inference(interpreter, img_path)
             inference_timer.end_cycle() if inference_timer else None
         if inference_timer:

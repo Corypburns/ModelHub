@@ -12,7 +12,7 @@ from browser_load import run as run_browser_load
 
 def run_stress_cpu(size=1, inference_timer=None, **kwargs):
     inference_timer.start_cycle() if inference_timer else None
-    duration = size
+    duration = size * 2
     subprocess.run(["stress-ng", "--cpu", "4", "--timeout", f"{duration}s"], check=True)
     inference_timer.end_cycle() if inference_timer else None
 
@@ -75,7 +75,7 @@ def run_ffmpeg(size=1, inference_timer=None, **kwargs):
         "ffmpeg", "-y",
         "-f", "lavfi",
         "-i", "testsrc=size=1280x720:rate=30",
-        "-t", str(size),
+        "-t", str(size * 2),
         "-c:v", "libx264",
         output
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -88,7 +88,7 @@ def run_openssl(size=1, inference_timer=None, **kwargs):
     inference_timer.start_cycle() if inference_timer else None
     subprocess.run([
         "openssl", "speed",
-        "-seconds", str(size / 2)
+        "-seconds", str(size)
     ], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     inference_timer.end_cycle() if inference_timer else None
 
@@ -97,7 +97,7 @@ def run_gzip(size=1, inference_timer=None, **kwargs):
     inference_timer.start_cycle() if inference_timer else None
     filename = "gzip_test"
     with open(filename, "wb") as f:
-        f.write(os.urandom( 5 * 1024 *  1024 * size))
+        f.write(os.urandom( 10 * 1024 *  1024 * size))
     subprocess.run(["gzip", "-k", filename], check=True)
     for f in [filename, filename + ".gz"]:
         if os.path.exists(f):
@@ -107,7 +107,7 @@ def run_gzip(size=1, inference_timer=None, **kwargs):
 
 def run_make(size=1, inference_timer=None, **kwargs):
     inference_timer.start_cycle() if inference_timer else None
-    subprocess.run(["make", "-j", str(250 * size)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    subprocess.run(["make", "-j", str(1000 * size)], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     inference_timer.end_cycle() if inference_timer else None
 
 
